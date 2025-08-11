@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '@/lib/database';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
     try {
       const { numero, nome, telefone, email, consultor } = req.body;
@@ -14,7 +14,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       }
 
       // Confirmar a venda
-      const sucesso = db.confirmarVenda(numero, {
+      const sucesso = await db.confirmarVenda(numero, {
         nome,
         telefone,
         email,

@@ -1,5 +1,4 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { Pool, PoolClient } from 'pg';
 
 export interface Apartamento {
   id: number;
@@ -14,146 +13,205 @@ export interface Apartamento {
 }
 
 class DatabaseManager {
-  private db: Database.Database;
+  private pool: Pool;
 
   constructor() {
-    const dbPath = path.join(process.cwd(), 'data', 'visuplant.db');
-    this.db = new Database(dbPath);
+    // Configuração do pool de conexões PostgreSQL
+    this.pool = new Pool({
+      connectionString: process.env.DATABASE_URL || 'postgresql://visuplant_user:visuplant_password@localhost:5432/visuplant',
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+    });
+
     this.init();
   }
 
-  private init() {
-    // Criar tabela de apartamentos
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS apartamentos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        numero TEXT UNIQUE NOT NULL,
-        status TEXT DEFAULT 'disponivel' CHECK (status IN ('disponivel', 'negociacao', 'vendido')),
-        cliente_nome TEXT,
-        cliente_telefone TEXT,
-        cliente_email TEXT,
-        consultor_nome TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Inserir apartamentos iniciais se não existirem
-    const count = this.db.prepare('SELECT COUNT(*) as count FROM apartamentos').get() as { count: number };
-    
-    if (count.count === 0) {
-      const insertStmt = this.db.prepare(`
-        INSERT INTO apartamentos (numero) VALUES (?)
-      `);
-
-      // Lista de apartamentos disponíveis
-      const apartamentos = [
-        'L01',
-        '101', '102', '103', '104', '105', '106', '107', '108', '109',
-        '201', '202', '203', '204', '205', '206', '207', '208', '209', '210', '211',
-        '301', '302', '303', '304', '305', '306', '307', '308', '309',
-        '401', '402'
-      ];
-
-      apartamentos.forEach(numero => {
-        insertStmt.run(numero);
-      });
+  private async init() {
+    try {
+      // Testar conexão
+      const client = await this.pool.connect();
+      console.log('✅ Conectado ao PostgreSQL');
+      client.release();
+    } catch (error) {
+      console.error('❌ Erro ao conectar no PostgreSQL:', error);
+      // Em desenvolvimento, criar tabelas se não existirem
+      if (process.env.NODE_ENV !== 'production') {
+        await this.createTablesIfNotExists();
+      }
     }
   }
 
-  getAllApartamentos(): Apartamento[] {
-    return this.db.prepare('SELECT * FROM apartamentos ORDER BY numero').all() as Apartamento[];
+  private async createTablesIfNotExists() {
+    try {
+      const client = await this.pool.connect();
+      
+      // Criar tabela se não existir (para desenvolvimento local)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS apartamentos (
+          id SERIAL PRIMARY KEY,
+          numero VARCHAR(10) UNIQUE NOT NULL,
+          status VARCHAR(20) DEFAULT 'disponivel' CHECK (status IN ('disponivel', 'negociacao', 'vendido')),
+          cliente_nome VARCHAR(255),
+          cliente_telefone VARCHAR(20),
+          cliente_email VARCHAR(255),
+          consultor_nome VARCHAR(255),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Verificar se precisa inserir dados iniciais
+      const result = await client.query('SELECT COUNT(*) as count FROM apartamentos');
+      const count = parseInt(result.rows[0].count);
+
+      if (count === 0) {
+        const apartamentos = [
+          'L01',
+          '101', '102', '103', '104', '105', '106', '107', '108', '109',
+          '201', '202', '203', '204', '205', '206', '207', '208', '209', '210', '211',
+          '301', '302', '303', '304', '305', '306', '307', '308', '309',
+          '401', '402'
+        ];
+
+        for (const numero of apartamentos) {
+          await client.query('INSERT INTO apartamentos (numero) VALUES ($1)', [numero]);
+        }
+        
+        console.log('✅ Apartamentos iniciais inseridos');
+      }
+
+      client.release();
+    } catch (error) {
+      console.error('❌ Erro ao criar tabelas:', error);
+    }
   }
 
-  getApartamentoByNumero(numero: string): Apartamento | undefined {
-    return this.db.prepare('SELECT * FROM apartamentos WHERE numero = ?').get(numero) as Apartamento | undefined;
+  async getAllApartamentos(): Promise<Apartamento[]> {
+    try {
+      const result = await this.pool.query('SELECT * FROM apartamentos ORDER BY numero');
+      return result.rows;
+    } catch (error) {
+      console.error('Erro ao buscar apartamentos:', error);
+      return [];
+    }
   }
 
-  updateApartamentoStatus(numero: string, status: 'disponivel' | 'negociacao' | 'vendido', clienteData?: {
-    nome?: string;
-    telefone?: string;
-    email?: string;
-    consultor?: string;
-  }): boolean {
-    const updateStmt = this.db.prepare(`
-      UPDATE apartamentos 
-      SET status = ?, 
-          cliente_nome = ?, 
-          cliente_telefone = ?, 
-          cliente_email = ?, 
-          consultor_nome = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE numero = ?
-    `);
-
-    const result = updateStmt.run(
-      status,
-      clienteData?.nome || null,
-      clienteData?.telefone || null,
-      clienteData?.email || null,
-      clienteData?.consultor || null,
-      numero
-    );
-
-    return result.changes > 0;
+  async getApartamentoByNumero(numero: string): Promise<Apartamento | undefined> {
+    try {
+      const result = await this.pool.query('SELECT * FROM apartamentos WHERE numero = $1', [numero]);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Erro ao buscar apartamento:', error);
+      return undefined;
+    }
   }
 
-  reservarApartamento(numero: string): boolean {
-    // Verifica se está disponível e muda para negociação
-    const stmt = this.db.prepare(`
-      UPDATE apartamentos 
-      SET status = 'negociacao', updated_at = CURRENT_TIMESTAMP
-      WHERE numero = ? AND status = 'disponivel'
-    `);
-    
-    const result = stmt.run(numero);
-    return result.changes > 0;
+  async updateApartamentoStatus(
+    numero: string, 
+    status: 'disponivel' | 'negociacao' | 'vendido', 
+    clienteData?: {
+      nome?: string;
+      telefone?: string;
+      email?: string;
+      consultor?: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const result = await this.pool.query(`
+        UPDATE apartamentos 
+        SET status = $1, 
+            cliente_nome = $2, 
+            cliente_telefone = $3, 
+            cliente_email = $4, 
+            consultor_nome = $5,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE numero = $6
+      `, [
+        status,
+        clienteData?.nome || null,
+        clienteData?.telefone || null,
+        clienteData?.email || null,
+        clienteData?.consultor || null,
+        numero
+      ]);
+
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      console.error('Erro ao atualizar apartamento:', error);
+      return false;
+    }
   }
 
-  confirmarVenda(numero: string, clienteData: {
+  async reservarApartamento(numero: string): Promise<boolean> {
+    try {
+      const result = await this.pool.query(`
+        UPDATE apartamentos 
+        SET status = 'negociacao', updated_at = CURRENT_TIMESTAMP
+        WHERE numero = $1 AND status = 'disponivel'
+      `, [numero]);
+
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      console.error('Erro ao reservar apartamento:', error);
+      return false;
+    }
+  }
+
+  async confirmarVenda(numero: string, clienteData: {
     nome: string;
     telefone: string;
     email: string;
     consultor: string;
-  }): boolean {
-    // Confirma a venda apenas se estiver em negociação
-    const stmt = this.db.prepare(`
-      UPDATE apartamentos 
-      SET status = 'vendido',
-          cliente_nome = ?,
-          cliente_telefone = ?,
-          cliente_email = ?,
-          consultor_nome = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE numero = ? AND status = 'negociacao'
-    `);
-    
-    const result = stmt.run(
-      clienteData.nome,
-      clienteData.telefone,
-      clienteData.email,
-      clienteData.consultor,
-      numero
-    );
-    
-    return result.changes > 0;
+  }): Promise<boolean> {
+    try {
+      const result = await this.pool.query(`
+        UPDATE apartamentos 
+        SET status = 'vendido',
+            cliente_nome = $1,
+            cliente_telefone = $2,
+            cliente_email = $3,
+            consultor_nome = $4,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE numero = $5 AND status = 'negociacao'
+      `, [
+        clienteData.nome,
+        clienteData.telefone,
+        clienteData.email,
+        clienteData.consultor,
+        numero
+      ]);
+
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      console.error('Erro ao confirmar venda:', error);
+      return false;
+    }
   }
 
-  liberarApartamento(numero: string): boolean {
-    // Libera apartamento em negociação de volta para disponível
-    const stmt = this.db.prepare(`
-      UPDATE apartamentos 
-      SET status = 'disponivel',
-          cliente_nome = NULL,
-          cliente_telefone = NULL,
-          cliente_email = NULL,
-          consultor_nome = NULL,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE numero = ? AND status = 'negociacao'
-    `);
-    
-    const result = stmt.run(numero);
-    return result.changes > 0;
+  async liberarApartamento(numero: string): Promise<boolean> {
+    try {
+      const result = await this.pool.query(`
+        UPDATE apartamentos 
+        SET status = 'disponivel',
+            cliente_nome = NULL,
+            cliente_telefone = NULL,
+            cliente_email = NULL,
+            consultor_nome = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE numero = $1 AND status = 'negociacao'
+      `, [numero]);
+
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      console.error('Erro ao liberar apartamento:', error);
+      return false;
+    }
+  }
+
+  // Método para fechar conexões (útil para testes)
+  async close(): Promise<void> {
+    await this.pool.end();
   }
 }
 

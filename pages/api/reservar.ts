@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '@/lib/database';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
     try {
       const { numero } = req.body;
@@ -11,7 +11,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       }
 
       // Tentar reservar o apartamento
-      const sucesso = db.reservarApartamento(numero);
+      const sucesso = await db.reservarApartamento(numero);
 
       if (sucesso) {
         res.status(200).json({ 

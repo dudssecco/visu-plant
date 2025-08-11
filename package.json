@@ -10,17 +10,17 @@
   },
   "dependencies": {
     "@types/qrcode": "^1.5.5",
-    "better-sqlite3": "^9.2.2",
     "next": "^14.2.31",
+    "pg": "^8.11.3",
     "qrcode": "^1.5.3",
     "react": "^18",
     "react-dom": "^18",
     "socket.io": "^4.7.4",
-    "socket.io-client": "^4.7.4",
-    "sqlite3": "^5.1.6"
+    "socket.io-client": "^4.7.4"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pg": "^8.10.9",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.16",

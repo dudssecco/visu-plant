@@ -1,10 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '@/lib/database';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
-      const apartamentos = db.getAllApartamentos();
+      const apartamentos = await db.getAllApartamentos();
       res.status(200).json(apartamentos);
     } catch (error) {
       console.error('Erro ao buscar apartamentos:', error);
