@@ -38,21 +38,22 @@ services:
       # Volume para dados persistentes se ainda usar SQLite como fallback
       - app_data:/app/data
 
-  # Nginx como proxy reverso (opcional, mas recomendado para produção)
-  nginx:
-    image: nginx:alpine
-    container_name: visuplant-nginx
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - app
-    restart: unless-stopped
-    networks:
-      - visuplant-network
+  # Nginx removido para simplificar ambiente local
+  # Para produção, descomente a seção nginx abaixo:
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: visuplant-nginx
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - app
+  #   restart: unless-stopped
+  #   networks:
+  #     - visuplant-network
 
 volumes:
   postgres_data:

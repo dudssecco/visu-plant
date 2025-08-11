@@ -22,6 +22,9 @@ RUN npm ci
 # Copiar código da aplicação
 COPY . .
 
+# Criar pasta public se não existir
+RUN mkdir -p public
+
 # Build da aplicação Next.js
 RUN npm run build
 
@@ -44,14 +47,21 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production && npm cache clean --force
 
+# Criar diretórios necessários
+RUN mkdir -p .next public data
+
 # Copiar arquivos necessários do stage de build
 COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/server.js ./server.js
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.js ./next.config.js
 
-# Criar diretório para dados se não existir
-RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
+# Copiar public se existir, senão criar vazio
+RUN if [ -d "/app/public" ]; then \
+        cp -r /app/public/* ./public/ 2>/dev/null || true; \
+    fi
+
+# Configurar permissões
+RUN chown -R nextjs:nodejs /app
 
 # Mudar para usuário não-root
 USER nextjs
