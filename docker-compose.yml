@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # Banco de dados PostgreSQL dedicado
+  database:
+    image: postgres:15-alpine
+    container_name: visuplant-db
+    environment:
+      POSTGRES_DB: visuplant
+      POSTGRES_USER: visuplant_user
+      POSTGRES_PASSWORD: visuplant_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - visuplant-network
+
+  # Aplicação VisuPlant
+  app:
+    build: .
+    container_name: visuplant-app
+    environment:
+      NODE_ENV: production
+      PORT: 9000
+      DATABASE_URL: postgresql://visuplant_user:visuplant_password@database:5432/visuplant
+    ports:
+      - "9000:9000"
+    depends_on:
+      - database
+    restart: unless-stopped
+    networks:
+      - visuplant-network
+    volumes:
+      # Volume para dados persistentes se ainda usar SQLite como fallback
+      - app_data:/app/data
+
+  # Nginx como proxy reverso (opcional, mas recomendado para produção)
+  nginx:
+    image: nginx:alpine
+    container_name: visuplant-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - visuplant-network
+
+volumes:
+  postgres_data:
+    driver: local
+  app_data:
+    driver: local
+
+networks:
+  visuplant-network:
+    driver: bridge
