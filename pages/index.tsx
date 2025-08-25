@@ -116,9 +116,9 @@ export default function Home() {
             </svg>
           </div>
           <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-4">
-            VisuPlant
+            Studios
           </h1>
-          <p className="text-xl text-gray-600 font-medium">Sistema de Vendas em Tempo Real</p>
+          <p className="text-xl text-gray-600 font-medium">Sistema de Reservas em Tempo Real</p>
           <div className="w-24 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 mx-auto mt-4 rounded-full"></div>
         </div>
         
@@ -135,12 +135,12 @@ export default function Home() {
                 </h2>
               </div>
               <p className="text-gray-600 mb-6 text-sm">
-                Escaneie o código QR para acessar o formulário de compra
+                Escaneie o código QR para acessar o formulário de reserva
               </p>
               <div className="relative">
                 <img 
                   src={qrCodeGeral} 
-                  alt="QR Code para formulário de compra"
+                  alt="QR Code para formulário de reserva"
                   className="mx-auto w-40 h-40 mb-4 rounded-lg shadow-md"
                 />
                 <div className="absolute -top-2 -right-2 w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
@@ -174,7 +174,7 @@ export default function Home() {
               </div>
               <div className="flex items-center gap-3 group cursor-pointer">
                 <div className="w-5 h-5 bg-gradient-to-r from-red-400 to-red-600 rounded-full shadow-md group-hover:scale-110 transition-transform"></div>
-                <span className="text-gray-700 font-medium">Vendido</span>
+                <span className="text-gray-700 font-medium">Reservado</span>
               </div>
             </div>
           </div>
@@ -256,7 +256,7 @@ export default function Home() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                     </svg>
                     <div className="text-3xl font-bold mb-1">{apartamentos.filter(a => a.status === 'vendido').length}</div>
-                    <div className="text-sm opacity-90">Vendidos</div>
+                    <div className="text-sm opacity-90">Reservados</div>
                   </div>
                 </div>
               </div>

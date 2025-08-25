@@ -3,6 +3,12 @@ import { useRouter } from 'next/router';
 import { io, Socket } from 'socket.io-client';
 import { Apartamento } from '@/lib/database';
 
+declare global {
+  interface Window {
+    countdownInterval?: NodeJS.Timeout;
+  }
+}
+
 export default function FormularioMultiplo() {
   const router = useRouter();
   
@@ -13,6 +19,8 @@ export default function FormularioMultiplo() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [apartamentosSelecionados, setApartamentosSelecionados] = useState<string[]>([]);
+  const [timeoutWarning, setTimeoutWarning] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -28,6 +36,37 @@ export default function FormularioMultiplo() {
 
     // Buscar apartamentos disponíveis
     fetchApartamentos();
+
+    // Escutar eventos do WebSocket
+    socketInstance.on('apartamento-reservado', (numero: string) => {
+      setApartamentos(prev => 
+        prev.map(apt => 
+          apt.numero === numero 
+            ? { ...apt, status: 'negociacao' as const }
+            : apt
+        )
+      );
+    });
+
+    socketInstance.on('apartamento-vendido', (data: { numero: string }) => {
+      setApartamentos(prev => 
+        prev.map(apt => 
+          apt.numero === data.numero 
+            ? { ...apt, status: 'vendido' as const }
+            : apt
+        )
+      );
+    });
+
+    socketInstance.on('apartamento-liberado', (numero: string) => {
+      setApartamentos(prev => 
+        prev.map(apt => 
+          apt.numero === numero 
+            ? { ...apt, status: 'disponivel' as const }
+            : apt
+        )
+      );
+    });
 
     return () => {
       socketInstance.disconnect();
@@ -53,27 +92,182 @@ export default function FormularioMultiplo() {
     setError('');
   };
 
-  const handleApartamentoToggle = (numeroApartamento: string) => {
-    setApartamentosSelecionados(prev => {
-      if (prev.includes(numeroApartamento)) {
-        return prev.filter(num => num !== numeroApartamento);
-      } else {
-        return [...prev, numeroApartamento];
-      }
-    });
+  const handleApartamentoToggle = async (numeroApartamento: string) => {
     setError('');
+    
+    if (apartamentosSelecionados.includes(numeroApartamento)) {
+      // Removendo apartamento da seleção - liberar da reserva
+      try {
+        await fetch('/api/liberar', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ numero: numeroApartamento })
+        });
+
+        if (socket) {
+          socket.emit('liberar-apartamento', numeroApartamento);
+        }
+
+        setApartamentosSelecionados(prev => prev.filter(num => num !== numeroApartamento));
+      } catch (error) {
+        console.error('Erro ao liberar apartamento:', error);
+        setError('Erro ao liberar apartamento');
+      }
+    } else {
+      // Adicionando apartamento à seleção - fazer reserva temporária
+      const novaSeleção = [...apartamentosSelecionados, numeroApartamento];
+      
+      try {
+        const response = await fetch('/api/reservar-multiplo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ apartamentos: novaSeleção })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // Notificar via WebSocket que os apartamentos foram reservados
+          if (socket) {
+            novaSeleção.forEach(numero => {
+              socket.emit('reservar-apartamento', numero);
+            });
+          }
+          
+          setApartamentosSelecionados(novaSeleção);
+          
+          // Iniciar/reiniciar countdown de 60 segundos
+          setTimeoutWarning(true);
+          setCountdown(60);
+          
+          // Limpar countdown anterior se existir
+          if (window.countdownInterval) {
+            clearInterval(window.countdownInterval);
+          }
+          
+          window.countdownInterval = setInterval(() => {
+            setCountdown(prev => {
+              if (prev <= 1) {
+                clearInterval(window.countdownInterval);
+                setTimeoutWarning(false);
+                setError('Tempo esgotado! Os apartamentos foram liberados. Selecione novamente.');
+                setApartamentosSelecionados([]);
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+          
+        } else {
+          setError(data.error || 'Alguns apartamentos não estão mais disponíveis');
+        }
+      } catch (error) {
+        console.error('Erro ao reservar apartamentos:', error);
+        setError('Erro ao reservar apartamentos');
+      }
+    }
   };
 
-  const handleSelectAll = () => {
+  const handleSelectAll = async () => {
     const apartamentosDisponiveis = apartamentos
       .filter(apt => apt.status === 'disponivel')
       .map(apt => apt.numero);
     
-    setApartamentosSelecionados(apartamentosDisponiveis);
+    if (apartamentosDisponiveis.length === 0) {
+      setError('Nenhum apartamento disponível para seleção');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/reservar-multiplo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ apartamentos: apartamentosDisponiveis })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Notificar via WebSocket que os apartamentos foram reservados
+        if (socket) {
+          apartamentosDisponiveis.forEach(numero => {
+            socket.emit('reservar-apartamento', numero);
+          });
+        }
+        
+        setApartamentosSelecionados(apartamentosDisponiveis);
+        
+        // Iniciar countdown de 60 segundos
+        setTimeoutWarning(true);
+        setCountdown(60);
+        
+        // Limpar countdown anterior se existir
+        if (window.countdownInterval) {
+          clearInterval(window.countdownInterval);
+        }
+        
+        window.countdownInterval = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(window.countdownInterval);
+              setTimeoutWarning(false);
+              setError('Tempo esgotado! Os apartamentos foram liberados. Selecione novamente.');
+              setApartamentosSelecionados([]);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        
+      } else {
+        setError(data.error || 'Alguns apartamentos não estão mais disponíveis');
+      }
+    } catch (error) {
+      console.error('Erro ao reservar todos os apartamentos:', error);
+      setError('Erro ao reservar apartamentos');
+    }
   };
 
-  const handleDeselectAll = () => {
-    setApartamentosSelecionados([]);
+  const handleDeselectAll = async () => {
+    if (apartamentosSelecionados.length === 0) return;
+
+    try {
+      // Liberar todos os apartamentos selecionados
+      const liberarPromises = apartamentosSelecionados.map(numero => 
+        fetch('/api/liberar', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ numero })
+        })
+      );
+
+      await Promise.all(liberarPromises);
+
+      if (socket) {
+        apartamentosSelecionados.forEach(numero => {
+          socket.emit('liberar-apartamento', numero);
+        });
+      }
+
+      setApartamentosSelecionados([]);
+      setTimeoutWarning(false);
+      setCountdown(0);
+      
+      if (window.countdownInterval) {
+        clearInterval(window.countdownInterval);
+      }
+    } catch (error) {
+      console.error('Erro ao liberar apartamentos:', error);
+      setError('Erro ao liberar apartamentos');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -112,6 +306,13 @@ export default function FormularioMultiplo() {
       const data = await response.json();
 
       if (response.ok) {
+        // Cancelar countdown já que as vendas foram confirmadas
+        setTimeoutWarning(false);
+        setCountdown(0);
+        if (window.countdownInterval) {
+          clearInterval(window.countdownInterval);
+        }
+        
         // Notificar via WebSocket que as vendas foram confirmadas
         if (socket) {
           apartamentosSelecionados.forEach(numero => {
@@ -130,10 +331,10 @@ export default function FormularioMultiplo() {
         });
         setApartamentosSelecionados([]);
 
-        // Redirecionar após 5 segundos
+        // Redirecionar após 3 segundos
         setTimeout(() => {
           router.push('/');
-        }, 5000);
+        }, 3000);
       } else {
         setError(data.error || 'Erro ao confirmar as vendas');
       }
@@ -156,10 +357,10 @@ export default function FormularioMultiplo() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 py-12 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4">
       <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-2xl p-8 border border-gray-200">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full mx-auto mb-4 flex items-center justify-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full mx-auto mb-4 flex items-center justify-center">
             <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
             </svg>
@@ -195,11 +396,31 @@ export default function FormularioMultiplo() {
           </div>
         )}
 
+        {timeoutWarning && (
+          <div className="bg-amber-50 border-l-4 border-amber-400 text-amber-800 px-4 py-3 rounded-r-lg mb-6 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center">
+                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path>
+                </svg>
+                <span className="font-medium">Apartamentos reservados! Complete em:</span>
+              </div>
+              <span className="font-bold text-xl text-amber-600">{countdown}s</span>
+            </div>
+            <div className="w-full bg-amber-200 rounded-full h-2">
+              <div 
+                className="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full transition-all duration-1000" 
+                style={{ width: `${(countdown / 60) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-8">
           {/* Seção de dados pessoais */}
           <div className="bg-gray-50 p-6 rounded-lg">
             <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-              <svg className="w-5 h-5 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
               </svg>
               Dados Pessoais
@@ -218,7 +439,7 @@ export default function FormularioMultiplo() {
                   value={formData.nome}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
+                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
                   placeholder="Digite seu nome completo"
                 />
               </div>
@@ -235,7 +456,7 @@ export default function FormularioMultiplo() {
                   value={formData.telefone}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
+                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
                   placeholder="(11) 99999-9999"
                 />
               </div>
@@ -252,7 +473,7 @@ export default function FormularioMultiplo() {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
+                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
                   placeholder="seu@email.com"
                 />
               </div>
@@ -269,7 +490,7 @@ export default function FormularioMultiplo() {
                   value={formData.consultor}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
+                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
                   placeholder="Nome do consultor responsável"
                 />
               </div>
@@ -280,7 +501,7 @@ export default function FormularioMultiplo() {
           <div className="bg-gray-50 p-6 rounded-lg">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-800 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                 </svg>
                 Selecionar Apartamentos ({apartamentosSelecionados.length} selecionados)
@@ -305,8 +526,8 @@ export default function FormularioMultiplo() {
             </div>
 
             {apartamentosSelecionados.length > 0 && (
-              <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-                <p className="text-sm text-purple-800 font-medium">
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800 font-medium">
                   Apartamentos selecionados: {apartamentosSelecionados.sort().join(', ')}
                 </p>
               </div>
@@ -325,8 +546,8 @@ export default function FormularioMultiplo() {
                       ${!isDisponivel 
                         ? 'bg-gray-200 border-gray-300 cursor-not-allowed opacity-50' 
                         : isSelecionado
-                        ? 'bg-purple-500 border-purple-600 text-white shadow-lg transform scale-105'
-                        : 'bg-white border-gray-300 hover:border-purple-400 hover:shadow-md hover:scale-105'
+                        ? 'bg-blue-500 border-blue-600 text-white shadow-lg transform scale-105'
+                        : 'bg-white border-gray-300 hover:border-blue-400 hover:shadow-md hover:scale-105'
                       }
                     `}
                     onClick={() => isDisponivel && handleApartamentoToggle(apartamento.numero)}
@@ -362,7 +583,7 @@ export default function FormularioMultiplo() {
                   <span className="text-gray-600">Disponível</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-purple-500 rounded"></div>
+                  <div className="w-4 h-4 bg-blue-500 rounded"></div>
                   <span className="text-gray-600">Selecionado</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -382,7 +603,7 @@ export default function FormularioMultiplo() {
             <button
               type="submit"
               disabled={submitting || success !== '' || apartamentosSelecionados.length === 0}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 px-6 rounded-lg font-semibold text-lg shadow-lg hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-4 focus:ring-purple-300 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all duration-200 hover:scale-[1.02] disabled:hover:scale-100 flex items-center justify-center"
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 px-6 rounded-lg font-semibold text-lg shadow-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all duration-200 hover:scale-[1.02] disabled:hover:scale-100 flex items-center justify-center"
             >
               {submitting ? (
                 <>
@@ -408,7 +629,7 @@ export default function FormularioMultiplo() {
         <div className="text-center mt-8 pt-6 border-t border-gray-200">
           <button
             onClick={() => router.push('/')}
-            className="inline-flex items-center text-gray-600 hover:text-purple-600 text-sm font-medium transition-colors duration-200"
+            className="inline-flex items-center text-gray-600 hover:text-blue-600 text-sm font-medium transition-colors duration-200"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>

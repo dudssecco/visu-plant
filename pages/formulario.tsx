@@ -155,7 +155,7 @@ export default function Formulario() {
           socket.emit('confirmar-venda', { numero: formData.apartamento });
         }
 
-        setSuccess(`Parabéns! Apartamento ${formData.apartamento} confirmado com sucesso!`);
+        setSuccess(`Parabéns! Reserva do apartamento ${formData.apartamento} confirmada com sucesso!`);
         
         // Limpar formulário
         setFormData({
@@ -171,7 +171,7 @@ export default function Formulario() {
           router.push('/');
         }, 3000);
       } else {
-        setError(data.error || 'Erro ao confirmar a venda');
+        setError(data.error || 'Erro ao confirmar a reserva');
       }
     } catch (error) {
       console.error('Erro ao enviar formulário:', error);
@@ -201,9 +201,9 @@ export default function Formulario() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Formulário de Compra
+            Formulário de Reserva
           </h1>
-          <p className="text-gray-600">Complete seus dados para finalizar a compra</p>
+          <p className="text-gray-600">Complete seus dados para confirmar a reserva</p>
         </div>
 
         {error && (
@@ -386,7 +386,7 @@ export default function Formulario() {
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  Confirmar Compra
+                  Confirmar Reserva
                 </>
               )}
             </button>
