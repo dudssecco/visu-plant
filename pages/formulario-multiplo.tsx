@@ -29,6 +29,9 @@ export default function FormularioMultiplo() {
     consultor: ''
   });
 
+  // Unidades especiais: somente estas devem aparecer nesta página
+  const unidadesEspeciais = new Set(['101','102','103','104','109','110','204','210','403','405']);
+
   useEffect(() => {
     // Conectar ao WebSocket
     const socketInstance = io();
@@ -173,8 +176,9 @@ export default function FormularioMultiplo() {
   };
 
   const handleSelectAll = async () => {
+    // Selecionar apenas os disponíveis dentre as unidades especiais
     const apartamentosDisponiveis = apartamentos
-      .filter(apt => apt.status === 'disponivel')
+      .filter(apt => unidadesEspeciais.has(apt.numero) && apt.status === 'disponivel')
       .map(apt => apt.numero);
     
     if (apartamentosDisponiveis.length === 0) {
@@ -346,7 +350,9 @@ export default function FormularioMultiplo() {
     }
   };
 
-  const apartamentosDisponiveis = apartamentos.filter(apt => apt.status === 'disponivel');
+  // Filtrar apenas as unidades especiais para exibição
+  const apartamentosEspeciais = apartamentos.filter(apt => unidadesEspeciais.has(apt.numero));
+  const apartamentosDisponiveis = apartamentosEspeciais.filter(apt => apt.status === 'disponivel');
 
   if (loading) {
     return (
@@ -366,7 +372,7 @@ export default function FormularioMultiplo() {
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Formulário de Compra Múltipla
+            Formulário de Reserva Múltipla
           </h1>
           <p className="text-gray-600">Selecione múltiplos apartamentos e complete seus dados</p>
         </div>
@@ -534,7 +540,7 @@ export default function FormularioMultiplo() {
             )}
 
             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-3">
-              {apartamentos.map((apartamento) => {
+              {apartamentosEspeciais.map((apartamento) => {
                 const isDisponivel = apartamento.status === 'disponivel';
                 const isSelecionado = apartamentosSelecionados.includes(apartamento.numero);
                 
@@ -618,7 +624,7 @@ export default function FormularioMultiplo() {
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  Confirmar Compra de {apartamentosSelecionados.length} Apartamento(s)
+                  Confirmar Reserva de {apartamentosSelecionados.length} Apartamento(s)
                 </>
               )}
             </button>
