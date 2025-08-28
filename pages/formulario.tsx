@@ -89,9 +89,9 @@ export default function Formulario() {
         }
         setFormData(prev => ({ ...prev, apartamento: numeroApartamento }));
         
-        // Iniciar countdown de 60 segundos
+        // Iniciar countdown de 120 segundos
         setTimeoutWarning(true);
-        setCountdown(60);
+        setCountdown(120);
         
         const countdownInterval = setInterval(() => {
           setCountdown(prev => {
@@ -246,8 +246,8 @@ export default function Formulario() {
             </div>
             <div className="w-full bg-amber-200 rounded-full h-2">
               <div 
-                className="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full transition-all duration-1000" 
-                style={{ width: `${(countdown / 60) * 100}%` }}
+                className="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full transition-all duração-1000" 
+                style={{ width: `${(countdown / 120) * 100}%` }}
               ></div>
             </div>
           </div>

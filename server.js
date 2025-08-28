@@ -36,7 +36,7 @@ app.prepare().then(() => {
         clearTimeout(apartamentoTimeouts.get(numero));
       }
 
-      // Criar timeout de 60 segundos
+      // Criar timeout de 120 segundos
       const timeoutId = setTimeout(() => {
         console.log('Timeout: Liberando apartamento', numero);
         // Liberar apartamento no backend
@@ -49,7 +49,7 @@ app.prepare().then(() => {
           io.emit('apartamento-liberado', numero);
           apartamentoTimeouts.delete(numero);
         }).catch(console.error);
-      }, 60000); // 60 segundos
+      }, 120000); // 120 segundos
 
       apartamentoTimeouts.set(numero, timeoutId);
       
@@ -71,42 +71,18 @@ app.prepare().then(() => {
       io.emit('apartamento-vendido', data);
     });
 
-    // Fluxo: negociar por 20s e vender automaticamente
+    // Fluxo: entrar em negociação (amarelo) e permanecer assim (sem venda automática)
     socket.on('negociar-e-vender', (numero) => {
-      console.log('Negociar e vender em 20s:', numero);
+      console.log('Negociar (sem auto-venda):', numero);
 
-      // Cancelar timeout anterior se existir
+      // Cancelar timeout anterior se existir e não agendar novo
       if (apartamentoTimeouts.has(numero)) {
         clearTimeout(apartamentoTimeouts.get(numero));
+        apartamentoTimeouts.delete(numero);
       }
 
       // Emite imediatamente que entrou em negociação (amarelo)
       io.emit('apartamento-reservado', numero);
-
-      // Agenda venda em 20 segundos
-      const timeoutId = setTimeout(() => {
-        console.log('Auto-venda após 20s:', numero);
-        fetch(`http://localhost:${port}/api/confirmar-venda`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ numero })
-        }).then(async (r) => {
-          if (!r.ok) {
-            const txt = await r.text();
-            console.error('Falha ao confirmar venda automática:', txt);
-            apartamentoTimeouts.delete(numero);
-            return;
-          }
-          // Broadcast de vendido
-          io.emit('apartamento-vendido', { numero });
-          apartamentoTimeouts.delete(numero);
-        }).catch((err) => {
-          console.error('Erro ao confirmar venda automática:', err);
-          apartamentoTimeouts.delete(numero);
-        });
-      }, 20000);
-
-      apartamentoTimeouts.set(numero, timeoutId);
     });
 
     // Quando precisa liberar apartamento (volta para verde)

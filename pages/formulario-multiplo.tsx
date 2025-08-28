@@ -110,7 +110,7 @@ export default function FormularioMultiplo() {
       if (socket) {
         socket.emit('negociar-e-vender', numeroApartamento);
       }
-      setSuccess(`Apartamento ${numeroApartamento} em negociação. Será vendido automaticamente em 20s.`);
+      setSuccess(`Apartamento ${numeroApartamento} em negociação.`);
     } catch (error) {
       console.error('Erro ao iniciar negociação:', error);
       setError('Erro ao iniciar negociação');
