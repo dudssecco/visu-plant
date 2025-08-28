@@ -15,7 +15,6 @@ export default function FormularioMultiplo() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [apartamentos, setApartamentos] = useState<Apartamento[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [apartamentosSelecionados, setApartamentosSelecionados] = useState<string[]>([]);
@@ -339,87 +338,7 @@ export default function FormularioMultiplo() {
           </div>
         )}
 
-        <form className="space-y-8">
-          {/* Seção de dados pessoais */}
-          <div className="bg-gray-50 p-6 rounded-lg">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-              <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-              </svg>
-              Dados Pessoais
-            </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Nome */}
-              <div className="group">
-                <label htmlFor="nome" className="block text-sm font-semibold text-gray-800 mb-2">
-                  Nome Completo *
-                </label>
-                <input
-                  type="text"
-                  id="nome"
-                  name="nome"
-                  value={formData.nome}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
-                  placeholder="Digite seu nome completo"
-                />
-              </div>
-
-              {/* Telefone */}
-              <div className="group">
-                <label htmlFor="telefone" className="block text-sm font-semibold text-gray-800 mb-2">
-                  Telefone *
-                </label>
-                <input
-                  type="tel"
-                  id="telefone"
-                  name="telefone"
-                  value={formData.telefone}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
-                  placeholder="(11) 99999-9999"
-                />
-              </div>
-
-              {/* Email */}
-              <div className="group">
-                <label htmlFor="email" className="block text-sm font-semibold text-gray-800 mb-2">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
-                  placeholder="seu@email.com"
-                />
-              </div>
-
-              {/* Consultor */}
-              <div className="group">
-                <label htmlFor="consultor" className="block text-sm font-semibold text-gray-800 mb-2">
-                  Nome do Consultor *
-                </label>
-                <input
-                  type="text"
-                  id="consultor"
-                  name="consultor"
-                  value={formData.consultor}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 text-gray-900 bg-white border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
-                  placeholder="Nome do consultor responsável"
-                />
-              </div>
-            </div>
-          </div>
-
+        <div className="space-y-8">
           {/* Seção de apartamentos */}
           <div className="bg-gray-50 p-6 rounded-lg">
             <div className="flex justify-between items-center mb-4">
@@ -501,33 +420,7 @@ export default function FormularioMultiplo() {
               {apartamentosDisponiveis.length} apartamentos disponíveis para seleção
             </p>
           </div>
-
-          {/* Botão de envio */}
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={submitting || success !== '' || apartamentosSelecionados.length === 0}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 px-6 rounded-lg font-semibold text-lg shadow-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all duration-200 hover:scale-[1.02] disabled:hover:scale-100 flex items-center justify-center"
-            >
-              {submitting ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Processando {apartamentosSelecionados.length} apartamento(s)...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                  Confirmar Reserva de {apartamentosSelecionados.length} Apartamento(s)
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+        </div>
 
         {/* Link de volta */}
         <div className="text-center mt-8 pt-6 border-t border-gray-200">
