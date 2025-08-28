@@ -17,11 +17,18 @@ CREATE TABLE IF NOT EXISTS apartamentos (
 -- Inserir apartamentos iniciais
 INSERT INTO apartamentos (numero) VALUES 
 ('L01'),
-('101'), ('102'), ('103'), ('104'), ('105'), ('106'), ('107'), ('108'), ('109'),
-('201'), ('202'), ('203'), ('204'), ('205'), ('206'), ('207'), ('208'), ('209'), ('210'), ('211'),
+('101'), ('102'), ('103'), ('104'), ('105'), ('106'), ('107'), ('108'), ('109'), ('110'), ('111'),
+('201'), ('202'), ('203'), ('204'), ('205'), ('206'), ('207'), ('208'), ('209'), ('210'), ('211'), ('212'),
 ('301'), ('302'), ('303'), ('304'), ('305'), ('306'), ('307'), ('308'), ('309'),
-('401'), ('402')
-ON CONFLICT (numero) DO NOTHING;
+('401'), ('402'), ('403'), ('404'), ('405'), ('406'), ('407'), ('408'), ('409'),
+('501'), ('502')
+ON CONFLICT (numero) DO UPDATE SET
+  status = 'disponivel',
+  cliente_nome = NULL,
+  cliente_telefone = NULL,
+  cliente_email = NULL,
+  consultor_nome = NULL,
+  updated_at = CURRENT_TIMESTAMP;
 
 -- Criar índices para melhor performance
 CREATE INDEX IF NOT EXISTS idx_apartamentos_status ON apartamentos(status);

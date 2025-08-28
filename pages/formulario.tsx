@@ -182,6 +182,8 @@ export default function Formulario() {
   };
 
   const apartamentosDisponiveis = apartamentos.filter(apt => apt.status === 'disponivel');
+  const unidadesBloqueadas = new Set(['101', '102', '103', '104', '109', '110', '204', '210', '403', '405']);
+  const apartamentosSelecionaveis = apartamentosDisponiveis.filter(apt => !unidadesBloqueadas.has(apt.numero));
 
   if (loading) {
     return (
@@ -252,6 +254,39 @@ export default function Formulario() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Apartamento */}
+          <div className="group">
+            <label htmlFor="apartamento" className="block text-sm font-semibold text-gray-800 mb-2 flex items-center">
+              <svg className="w-4 h-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+              </svg>
+              Apartamento *
+            </label>
+            <select
+              id="apartamento"
+              name="apartamento"
+              value={formData.apartamento}
+              onChange={(e) => {
+                handleInputChange(e);
+                handleApartamentoSelect(e.target.value);
+              }}
+              required
+              className="w-full px-4 py-3 text-gray-900 bg-gray-50 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300 appearance-none cursor-pointer"
+            >
+              <option value="" className="text-gray-500">Selecione um apartamento disponível</option>
+              {apartamentosSelecionaveis.map((apt) => (
+                <option key={apt.id} value={apt.numero} className="text-gray-900">
+                  {apt.numero === 'L01' ? 'Loja L01' : `Apartamento ${apt.numero}`}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center mt-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+              <p className="text-sm text-gray-600">
+                {apartamentosSelecionaveis.length} apartamentos disponíveis
+              </p>
+            </div>
+          </div>
           {/* Nome */}
           <div className="group">
             <label htmlFor="nome" className="block text-sm font-semibold text-gray-800 mb-2 flex items-center">
@@ -332,39 +367,6 @@ export default function Formulario() {
             />
           </div>
 
-          {/* Apartamento */}
-          <div className="group">
-            <label htmlFor="apartamento" className="block text-sm font-semibold text-gray-800 mb-2 flex items-center">
-              <svg className="w-4 h-4 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-              </svg>
-              Apartamento *
-            </label>
-            <select
-              id="apartamento"
-              name="apartamento"
-              value={formData.apartamento}
-              onChange={(e) => {
-                handleInputChange(e);
-                handleApartamentoSelect(e.target.value);
-              }}
-              required
-              className="w-full px-4 py-3 text-gray-900 bg-gray-50 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300 appearance-none cursor-pointer"
-            >
-              <option value="" className="text-gray-500">Selecione um apartamento disponível</option>
-              {apartamentosDisponiveis.map((apt) => (
-                <option key={apt.id} value={apt.numero} className="text-gray-900">
-                  {apt.numero === 'L01' ? 'Loja L01' : `Apartamento ${apt.numero}`}
-                </option>
-              ))}
-            </select>
-            <div className="flex items-center mt-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-              <p className="text-sm text-gray-600">
-                {apartamentosDisponiveis.length} apartamentos disponíveis
-              </p>
-            </div>
-          </div>
 
           {/* Botão de envio */}
           <div className="pt-4">

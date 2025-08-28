@@ -68,10 +68,11 @@ class DatabaseManager {
       if (count === 0) {
         const apartamentos = [
           'L01',
-          '101', '102', '103', '104', '105', '106', '107', '108', '109',
-          '201', '202', '203', '204', '205', '206', '207', '208', '209', '210', '211',
+          '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '111',
+          '201', '202', '203', '204', '205', '206', '207', '208', '209', '210', '211', '212',
           '301', '302', '303', '304', '305', '306', '307', '308', '309',
-          '401', '402'
+          '401', '402', '403', '404', '405', '406', '407', '408', '409',
+          '501', '502'
         ];
 
         for (const numero of apartamentos) {
@@ -206,6 +207,32 @@ class DatabaseManager {
     } catch (error) {
       console.error('Erro ao liberar apartamento:', error);
       return false;
+    }
+  }
+
+  async upsertApartamentosDisponiveis(numeros: string[]): Promise<number> {
+    if (!numeros || numeros.length === 0) return 0;
+    const client = await this.pool.connect();
+    try {
+      const valuesPlaceholders = numeros.map((_, idx) => `($${idx + 1}, 'disponivel')`).join(', ');
+      const query = `
+        INSERT INTO apartamentos (numero, status)
+        VALUES ${valuesPlaceholders}
+        ON CONFLICT (numero) DO UPDATE SET
+          status = 'disponivel',
+          cliente_nome = NULL,
+          cliente_telefone = NULL,
+          cliente_email = NULL,
+          consultor_nome = NULL,
+          updated_at = CURRENT_TIMESTAMP
+      `;
+      const result = await client.query(query, numeros);
+      return result.rowCount ?? 0;
+    } catch (error) {
+      console.error('Erro ao upsert de apartamentos:', error);
+      return 0;
+    } finally {
+      client.release();
     }
   }
 
