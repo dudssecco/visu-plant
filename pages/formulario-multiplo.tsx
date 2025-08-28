@@ -88,27 +88,32 @@ export default function FormularioMultiplo() {
   const handleApartamentoToggle = async (numeroApartamento: string) => {
     setError('');
     try {
-      const response = await fetch('/api/confirmar-venda', {
+      // 1) Marca como negociação no backend
+      const reservarResponse = await fetch('/api/reservar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ numero: numeroApartamento })
       });
-      const data = await response.json();
-      if (response.ok) {
-        // Emite evento de vendido e atualiza imediatamente para vermelho
-        if (socket) {
-          socket.emit('confirmar-venda', { numero: numeroApartamento });
-        }
-        setApartamentos(prev => prev.map(apt => (
-          apt.numero === numeroApartamento ? { ...apt, status: 'vendido' as const } : apt
-        )));
-        setSuccess(`Apartamento ${numeroApartamento} vendido`);
-      } else {
-        setError(data.error || 'Apartamento indisponível para venda');
+      const reservarData = await reservarResponse.json();
+
+      if (!reservarResponse.ok) {
+        setError(reservarData.error || 'Não foi possível colocar em negociação');
+        return;
       }
+
+      // 2) Atualiza local para negociação
+      setApartamentos(prev => prev.map(apt => (
+        apt.numero === numeroApartamento ? { ...apt, status: 'negociacao' as const } : apt
+      )));
+
+      // 3) Dispara fluxo de negociar e vender em 20s via socket (servidor orquestra)
+      if (socket) {
+        socket.emit('negociar-e-vender', numeroApartamento);
+      }
+      setSuccess(`Apartamento ${numeroApartamento} em negociação. Será vendido automaticamente em 20s.`);
     } catch (error) {
-      console.error('Erro na venda rápida:', error);
-      setError('Erro ao processar venda');
+      console.error('Erro ao iniciar negociação:', error);
+      setError('Erro ao iniciar negociação');
     }
   };
 

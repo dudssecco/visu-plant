@@ -71,6 +71,44 @@ app.prepare().then(() => {
       io.emit('apartamento-vendido', data);
     });
 
+    // Fluxo: negociar por 20s e vender automaticamente
+    socket.on('negociar-e-vender', (numero) => {
+      console.log('Negociar e vender em 20s:', numero);
+
+      // Cancelar timeout anterior se existir
+      if (apartamentoTimeouts.has(numero)) {
+        clearTimeout(apartamentoTimeouts.get(numero));
+      }
+
+      // Emite imediatamente que entrou em negociação (amarelo)
+      io.emit('apartamento-reservado', numero);
+
+      // Agenda venda em 20 segundos
+      const timeoutId = setTimeout(() => {
+        console.log('Auto-venda após 20s:', numero);
+        fetch(`http://localhost:${port}/api/confirmar-venda`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ numero })
+        }).then(async (r) => {
+          if (!r.ok) {
+            const txt = await r.text();
+            console.error('Falha ao confirmar venda automática:', txt);
+            apartamentoTimeouts.delete(numero);
+            return;
+          }
+          // Broadcast de vendido
+          io.emit('apartamento-vendido', { numero });
+          apartamentoTimeouts.delete(numero);
+        }).catch((err) => {
+          console.error('Erro ao confirmar venda automática:', err);
+          apartamentoTimeouts.delete(numero);
+        });
+      }, 20000);
+
+      apartamentoTimeouts.set(numero, timeoutId);
+    });
+
     // Quando precisa liberar apartamento (volta para verde)
     socket.on('liberar-apartamento', (numero) => {
       console.log('Liberando apartamento:', numero);
