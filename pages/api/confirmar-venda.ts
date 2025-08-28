@@ -6,11 +6,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       const { numero, nome, telefone, email, consultor } = req.body;
 
-      // Validar campos obrigatórios
+      // Modo venda rápida: sem dados pessoais
+      if (!nome && !telefone && !email && !consultor) {
+        const sucesso = await db.vendaRapida(numero);
+        if (sucesso) {
+          return res.status(200).json({ success: true, message: 'Venda rápida concluída', numero });
+        }
+        return res.status(409).json({ error: 'Apartamento não disponível para venda rápida' });
+      }
+
+      // Validação padrão com dados pessoais
       if (!numero || !nome || !telefone || !email || !consultor) {
-        return res.status(400).json({ 
-          error: 'Todos os campos são obrigatórios' 
-        });
+        return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
       }
 
       // Confirmar a venda

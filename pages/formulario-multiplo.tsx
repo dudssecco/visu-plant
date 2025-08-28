@@ -22,12 +22,7 @@ export default function FormularioMultiplo() {
   const [timeoutWarning, setTimeoutWarning] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  const [formData, setFormData] = useState({
-    nome: '',
-    telefone: '',
-    email: '',
-    consultor: ''
-  });
+  // Sem formulário de dados pessoais nesta página
 
   // Unidades especiais: somente estas devem aparecer nesta página
   const unidadesEspeciais = new Set(['101','102','103','104','109','110','204','210','403','405']);
@@ -89,11 +84,7 @@ export default function FormularioMultiplo() {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setError('');
-  };
+  // Removidos handlers de inputs
 
   const handleApartamentoToggle = async (numeroApartamento: string) => {
     setError('');
@@ -274,81 +265,7 @@ export default function FormularioMultiplo() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setError('');
-
-    // Validação básica
-    if (!formData.nome || !formData.telefone || !formData.email || !formData.consultor) {
-      setError('Todos os campos são obrigatórios');
-      setSubmitting(false);
-      return;
-    }
-
-    if (apartamentosSelecionados.length === 0) {
-      setError('Selecione pelo menos um apartamento');
-      setSubmitting(false);
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/confirmar-venda-multipla', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          apartamentos: apartamentosSelecionados,
-          nome: formData.nome,
-          telefone: formData.telefone,
-          email: formData.email,
-          consultor: formData.consultor
-        })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Cancelar countdown já que as vendas foram confirmadas
-        setTimeoutWarning(false);
-        setCountdown(0);
-        if (window.countdownInterval) {
-          clearInterval(window.countdownInterval);
-        }
-        
-        // Notificar via WebSocket que as vendas foram confirmadas
-        if (socket) {
-          apartamentosSelecionados.forEach(numero => {
-            socket.emit('confirmar-venda', { numero });
-          });
-        }
-
-        setSuccess(`Parabéns! ${apartamentosSelecionados.length} apartamento(s) confirmado(s) com sucesso: ${apartamentosSelecionados.join(', ')}`);
-        
-        // Limpar formulário
-        setFormData({
-          nome: '',
-          telefone: '',
-          email: '',
-          consultor: ''
-        });
-        setApartamentosSelecionados([]);
-
-        // Redirecionar após 3 segundos
-        setTimeout(() => {
-          router.push('/');
-        }, 3000);
-      } else {
-        setError(data.error || 'Erro ao confirmar as vendas');
-      }
-    } catch (error) {
-      console.error('Erro ao enviar formulário:', error);
-      setError('Erro ao processar sua solicitação');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // Sem submit – ação é no clique do apartamento
 
   // Filtrar apenas as unidades especiais para exibição
   const apartamentosEspeciais = apartamentos.filter(apt => unidadesEspeciais.has(apt.numero));
@@ -422,7 +339,7 @@ export default function FormularioMultiplo() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form className="space-y-8">
           {/* Seção de dados pessoais */}
           <div className="bg-gray-50 p-6 rounded-lg">
             <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
@@ -510,25 +427,10 @@ export default function FormularioMultiplo() {
                 <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                 </svg>
-                Selecionar Apartamentos ({apartamentosSelecionados.length} selecionados)
+                Selecionar Apartamentos
               </h2>
               
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAll}
-                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
-                >
-                  Selecionar Todos
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeselectAll}
-                  className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm font-medium"
-                >
-                  Limpar Seleção
-                </button>
-              </div>
+              <div className="flex gap-2" />
             </div>
 
             {apartamentosSelecionados.length > 0 && (
@@ -589,12 +491,8 @@ export default function FormularioMultiplo() {
                   <span className="text-gray-600">Disponível</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                  <span className="text-gray-600">Selecionado</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-gray-200 rounded"></div>
-                  <span className="text-gray-600">Indisponível</span>
+                  <div className="w-4 h-4 bg-red-500 rounded"></div>
+                  <span className="text-gray-600">Vendido</span>
                 </div>
               </div>
             </div>
