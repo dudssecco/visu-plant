@@ -87,81 +87,28 @@ export default function FormularioMultiplo() {
 
   const handleApartamentoToggle = async (numeroApartamento: string) => {
     setError('');
-    
-    if (apartamentosSelecionados.includes(numeroApartamento)) {
-      // Removendo apartamento da seleção - liberar da reserva
-      try {
-        await fetch('/api/liberar', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ numero: numeroApartamento })
-        });
-
+    try {
+      const response = await fetch('/api/confirmar-venda', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero: numeroApartamento })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        // Emite evento de vendido e atualiza imediatamente para vermelho
         if (socket) {
-          socket.emit('liberar-apartamento', numeroApartamento);
+          socket.emit('confirmar-venda', { numero: numeroApartamento });
         }
-
-        setApartamentosSelecionados(prev => prev.filter(num => num !== numeroApartamento));
-      } catch (error) {
-        console.error('Erro ao liberar apartamento:', error);
-        setError('Erro ao liberar apartamento');
+        setApartamentos(prev => prev.map(apt => (
+          apt.numero === numeroApartamento ? { ...apt, status: 'vendido' as const } : apt
+        )));
+        setSuccess(`Apartamento ${numeroApartamento} vendido`);
+      } else {
+        setError(data.error || 'Apartamento indisponível para venda');
       }
-    } else {
-      // Adicionando apartamento à seleção - fazer reserva temporária
-      const novaSeleção = [...apartamentosSelecionados, numeroApartamento];
-      
-      try {
-        const response = await fetch('/api/reservar-multiplo', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ apartamentos: novaSeleção })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          // Notificar via WebSocket que os apartamentos foram reservados
-          if (socket) {
-            novaSeleção.forEach(numero => {
-              socket.emit('reservar-apartamento', numero);
-            });
-          }
-          
-          setApartamentosSelecionados(novaSeleção);
-          
-          // Iniciar/reiniciar countdown de 60 segundos
-          setTimeoutWarning(true);
-          setCountdown(60);
-          
-          // Limpar countdown anterior se existir
-          if (window.countdownInterval) {
-            clearInterval(window.countdownInterval);
-          }
-          
-          window.countdownInterval = setInterval(() => {
-            setCountdown(prev => {
-              if (prev <= 1) {
-                clearInterval(window.countdownInterval);
-                setTimeoutWarning(false);
-                setError('Tempo esgotado! Os apartamentos foram liberados. Selecione novamente.');
-                setApartamentosSelecionados([]);
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
-          
-        } else {
-          setError(data.error || 'Alguns apartamentos não estão mais disponíveis');
-        }
-      } catch (error) {
-        console.error('Erro ao reservar apartamentos:', error);
-        setError('Erro ao reservar apartamentos');
-      }
+    } catch (error) {
+      console.error('Erro na venda rápida:', error);
+      setError('Erro ao processar venda');
     }
   };
 
