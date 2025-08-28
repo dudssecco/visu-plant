@@ -318,25 +318,7 @@ export default function FormularioMultiplo() {
           </div>
         )}
 
-        {timeoutWarning && (
-          <div className="bg-amber-50 border-l-4 border-amber-400 text-amber-800 px-4 py-3 rounded-r-lg mb-6 shadow-sm">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"></path>
-                </svg>
-                <span className="font-medium">Apartamentos reservados! Complete em:</span>
-              </div>
-              <span className="font-bold text-xl text-amber-600">{countdown}s</span>
-            </div>
-            <div className="w-full bg-amber-200 rounded-full h-2">
-              <div 
-                className="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full transition-all duration-1000" 
-                style={{ width: `${(countdown / 60) * 100}%` }}
-              ></div>
-            </div>
-          </div>
-        )}
+        {/* Temporizador removido nesta página */}
 
         <div className="space-y-8">
           {/* Seção de apartamentos */}
@@ -352,18 +334,12 @@ export default function FormularioMultiplo() {
               <div className="flex gap-2" />
             </div>
 
-            {apartamentosSelecionados.length > 0 && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-800 font-medium">
-                  Apartamentos selecionados: {apartamentosSelecionados.sort().join(', ')}
-                </p>
-              </div>
-            )}
+            {/* Painel de selecionados removido */}
 
             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 xl:grid-cols-12 gap-3">
               {apartamentosEspeciais.map((apartamento) => {
                 const isDisponivel = apartamento.status === 'disponivel';
-                const isSelecionado = apartamentosSelecionados.includes(apartamento.numero);
+                const isSelecionado = false;
                 
                 return (
                   <div
