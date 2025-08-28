@@ -211,45 +211,22 @@ class DatabaseManager {
   }
 
   async vendaRapida(numero: string): Promise<boolean> {
-    const client = await this.pool.connect();
     try {
-      await client.query('BEGIN');
-
-      const reservar = await client.query(`
-        UPDATE apartamentos 
-        SET status = 'negociacao', updated_at = CURRENT_TIMESTAMP
-        WHERE numero = $1 AND status = 'disponivel'
-      `, [numero]);
-
-      if (!reservar.rowCount) {
-        await client.query('ROLLBACK');
-        return false;
-      }
-
-      const vender = await client.query(`
-        UPDATE apartamentos 
+      const result = await this.pool.query(`
+        UPDATE apartamentos
         SET status = 'vendido',
             cliente_nome = NULL,
             cliente_telefone = NULL,
             cliente_email = NULL,
             consultor_nome = NULL,
             updated_at = CURRENT_TIMESTAMP
-        WHERE numero = $1 AND status = 'negociacao'
+        WHERE numero = $1 AND status IN ('disponivel', 'negociacao')
       `, [numero]);
 
-      if (!vender.rowCount) {
-        await client.query('ROLLBACK');
-        return false;
-      }
-
-      await client.query('COMMIT');
-      return true;
+      return result.rowCount !== null && result.rowCount > 0;
     } catch (error) {
       console.error('Erro em venda rápida:', error);
-      try { await client.query('ROLLBACK'); } catch {}
       return false;
-    } finally {
-      client.release();
     }
   }
 
