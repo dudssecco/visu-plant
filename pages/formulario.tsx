@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { io, Socket } from 'socket.io-client';
-import { Apartamento } from '@/lib/database';
+import { Apartamento, validarCPF, formatarCPF } from '@/lib/database';
 
 export default function Formulario() {
   const router = useRouter();
@@ -20,6 +20,7 @@ export default function Formulario() {
     nome: '',
     telefone: '',
     email: '',
+    cpf: '',
     consultor: '',
     apartamento: apartamentoPreSelecionado as string || ''
   });
@@ -58,7 +59,16 @@ export default function Formulario() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    if (name === 'cpf') {
+      // Formatar CPF em tempo real
+      const cpfLimpo = value.replace(/[^\d]/g, '');
+      const cpfFormatado = cpfLimpo.length <= 11 ? formatarCPF(cpfLimpo) : formData.cpf;
+      setFormData(prev => ({ ...prev, [name]: cpfFormatado }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    
     setError('');
   };
 
@@ -122,8 +132,15 @@ export default function Formulario() {
     setError('');
 
     // Validação básica
-    if (!formData.nome || !formData.telefone || !formData.email || !formData.consultor || !formData.apartamento) {
+    if (!formData.nome || !formData.telefone || !formData.email || !formData.cpf || !formData.consultor || !formData.apartamento) {
       setError('Todos os campos são obrigatórios');
+      setSubmitting(false);
+      return;
+    }
+
+    // Validação do CPF
+    if (!validarCPF(formData.cpf)) {
+      setError('CPF inválido. Verifique os números digitados.');
       setSubmitting(false);
       return;
     }
@@ -139,6 +156,7 @@ export default function Formulario() {
           nome: formData.nome,
           telefone: formData.telefone,
           email: formData.email,
+          cpf: formData.cpf,
           consultor: formData.consultor
         })
       });
@@ -162,6 +180,7 @@ export default function Formulario() {
           nome: '',
           telefone: '',
           email: '',
+          cpf: '',
           consultor: '',
           apartamento: ''
         });
@@ -344,6 +363,27 @@ export default function Formulario() {
               required
               className="w-full px-4 py-3 text-gray-900 bg-gray-50 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
               placeholder="seu@email.com"
+            />
+          </div>
+
+          {/* CPF */}
+          <div className="group">
+            <label htmlFor="cpf" className="block text-sm font-semibold text-gray-800 mb-2 flex items-center">
+              <svg className="w-4 h-4 mr-2 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V4a2 2 0 114 0v2m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path>
+              </svg>
+              CPF *
+            </label>
+            <input
+              type="text"
+              id="cpf"
+              name="cpf"
+              value={formData.cpf}
+              onChange={handleInputChange}
+              required
+              maxLength={14}
+              className="w-full px-4 py-3 text-gray-900 bg-gray-50 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
+              placeholder="000.000.000-00"
             />
           </div>
 

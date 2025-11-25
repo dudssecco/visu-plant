@@ -1,13 +1,13 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { db } from '@/lib/database';
+import { db, validarCPF } from '@/lib/database';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
     try {
-      const { numero, nome, telefone, email, consultor } = req.body;
+      const { numero, nome, telefone, email, cpf, consultor } = req.body;
 
       // Modo venda rápida: sem dados pessoais
-      if (!nome && !telefone && !email && !consultor) {
+      if (!nome && !telefone && !email && !cpf && !consultor) {
         const sucesso = await db.vendaRapida(numero);
         if (sucesso) {
           return res.status(200).json({ success: true, message: 'Venda rápida concluída', numero });
@@ -16,8 +16,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Validação padrão com dados pessoais
-      if (!numero || !nome || !telefone || !email || !consultor) {
+      if (!numero || !nome || !telefone || !email || !cpf || !consultor) {
         return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
+      }
+
+      // Validar CPF
+      if (!validarCPF(cpf)) {
+        return res.status(400).json({ error: 'CPF inválido. Verifique os números digitados.' });
+      }
+
+      // Verificar limite de 2 apartamentos por CPF
+      const { valido, apartamentosAtivos } = await db.verificarLimiteCPF(cpf);
+      if (!valido) {
+        return res.status(409).json({ 
+          error: `Este CPF já possui ${apartamentosAtivos} apartamento(s). Máximo permitido: 2 apartamentos por CPF.` 
+        });
       }
 
       // Confirmar a venda
@@ -25,6 +38,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         nome,
         telefone,
         email,
+        cpf,
         consultor
       });
 
