@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { io, Socket } from 'socket.io-client';
-import { Apartamento, validarCPF, formatarCPF } from '@/lib/database';
+import { Apartamento } from '@/lib/database';
+import { validarCPF, formatarCPF } from '@/lib/cpf-utils';
 
 export default function Formulario() {
   const router = useRouter();

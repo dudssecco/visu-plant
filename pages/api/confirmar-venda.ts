@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { db, validarCPF } from '@/lib/database';
+import { db } from '@/lib/database';
+import { validarCPF } from '@/lib/cpf-utils';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'POST') {
