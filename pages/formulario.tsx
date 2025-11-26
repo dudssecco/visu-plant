@@ -323,8 +323,13 @@ export default function Formulario() {
     }
   };
 
-  // Mostrar todos os apartamentos exceto os vendidos
-  const apartamentosVisiveis = apartamentos.filter(apt => apt.status !== 'vendido');
+  // Apartamentos exclusivos do formulário múltiplo (não devem aparecer aqui)
+  const apartamentosFormularioMultiplo = new Set(['L02', '207', '208', '209', '211', '213', '214', '215', '306', '307', '309']);
+
+  // Mostrar todos os apartamentos exceto os vendidos E os do formulário múltiplo
+  const apartamentosVisiveis = apartamentos.filter(apt =>
+    apt.status !== 'vendido' && !apartamentosFormularioMultiplo.has(apt.numero)
+  );
   const apartamentosDisponiveis = apartamentosVisiveis.filter(apt => apt.status === 'disponivel');
 
   if (loading) {
