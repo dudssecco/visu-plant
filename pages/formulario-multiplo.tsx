@@ -24,7 +24,7 @@ export default function FormularioMultiplo() {
   // Sem formulário de dados pessoais nesta página
 
   // Unidades especiais: somente estas devem aparecer nesta página (apartamentos já reservados)
-  const unidadesEspeciais = new Set(['L02', '207', '208', '209', '211', '213', '215', '306', '307', '309']);
+  const unidadesEspeciais = new Set(['L02', '207', '208', '209', '211', '213', '214', '215', '306', '307', '309']);
 
   useEffect(() => {
     // Conectar ao WebSocket

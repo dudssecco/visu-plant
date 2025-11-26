@@ -71,7 +71,7 @@ ON CONFLICT (numero) DO UPDATE SET status = 'disponivel', cliente_nome = NULL, c
 INSERT INTO apartamentos (numero, status) VALUES ('206', 'vendido')
 ON CONFLICT (numero) DO UPDATE SET status = 'vendido', cliente_nome = NULL, cliente_telefone = NULL, cliente_email = NULL, cliente_cpf = NULL, consultor_nome = NULL, updated_at = CURRENT_TIMESTAMP;
 
--- 207, 208, 209, 211, 213, 215: Disponível (formulário múltiplo)
+-- 207, 208, 209, 211, 213, 214, 215: Disponível (formulário múltiplo)
 INSERT INTO apartamentos (numero, status) VALUES ('207', 'disponivel')
 ON CONFLICT (numero) DO UPDATE SET status = 'disponivel', cliente_nome = NULL, cliente_telefone = NULL, cliente_email = NULL, cliente_cpf = NULL, consultor_nome = NULL, updated_at = CURRENT_TIMESTAMP;
 
