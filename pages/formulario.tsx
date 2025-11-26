@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { io, Socket } from 'socket.io-client';
 import { Apartamento } from '@/lib/database';
@@ -26,6 +26,17 @@ export default function Formulario() {
     apartamento: apartamentoPreSelecionado as string || ''
   });
 
+  // Estados para modal de fila de segunda opção
+  const [mostrarModalFila, setMostrarModalFila] = useState(false);
+  const [enviandoFila, setEnviandoFila] = useState(false);
+  const [successFila, setSuccessFila] = useState('');
+
+  // Flag para saber se o usuário atual reservou o apartamento
+  const [apartamentoReservadoPorMim, setApartamentoReservadoPorMim] = useState<string | null>(null);
+
+  // Ref para guardar o intervalo do countdown
+  const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     // Conectar ao WebSocket
     const socketInstance = io();
@@ -34,8 +45,46 @@ export default function Formulario() {
     // Buscar apartamentos disponíveis
     fetchApartamentos();
 
+    // Escutar eventos do WebSocket para atualizar lista em tempo real
+    socketInstance.on('apartamento-reservado', (numero: string) => {
+      console.log('🟡 Apartamento reservado:', numero);
+      setApartamentos(prev =>
+        prev.map(apt =>
+          apt.numero === numero
+            ? { ...apt, status: 'negociacao' as const }
+            : apt
+        )
+      );
+    });
+
+    socketInstance.on('apartamento-vendido', (data: { numero: string }) => {
+      console.log('🔴 Apartamento reservado:', data.numero);
+      setApartamentos(prev =>
+        prev.map(apt =>
+          apt.numero === data.numero
+            ? { ...apt, status: 'reservado' as const }
+            : apt
+        )
+      );
+    });
+
+    socketInstance.on('apartamento-liberado', (numero: string) => {
+      console.log('🟢 Apartamento liberado:', numero);
+      setApartamentos(prev =>
+        prev.map(apt =>
+          apt.numero === numero
+            ? { ...apt, status: 'disponivel' as const }
+            : apt
+        )
+      );
+    });
+
     return () => {
       socketInstance.disconnect();
+      // Limpar intervalo do countdown ao desmontar o componente
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+      }
     };
   }, []);
 
@@ -75,9 +124,14 @@ export default function Formulario() {
 
   const handleApartamentoSelect = async (numeroApartamento: string) => {
     if (!numeroApartamento) {
-      // Se deselecionar, cancelar countdown
+      // Se deselecionar, cancelar countdown e limpar flag
+      if (countdownIntervalRef.current) {
+        clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
+      }
       setTimeoutWarning(false);
       setCountdown(0);
+      setApartamentoReservadoPorMim(null);
       return;
     }
 
@@ -94,23 +148,35 @@ export default function Formulario() {
       const data = await response.json();
 
       if (response.ok) {
+        // Marcar que EU reservei este apartamento
+        setApartamentoReservadoPorMim(numeroApartamento);
+
         // Notificar via WebSocket que o apartamento foi reservado
         if (socket) {
           socket.emit('reservar-apartamento', numeroApartamento);
         }
         setFormData(prev => ({ ...prev, apartamento: numeroApartamento }));
-        
+
+        // Limpar intervalo anterior se existir
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+        }
+
         // Iniciar countdown de 120 segundos
         setTimeoutWarning(true);
         setCountdown(120);
-        
-        const countdownInterval = setInterval(() => {
+
+        countdownIntervalRef.current = setInterval(() => {
           setCountdown(prev => {
             if (prev <= 1) {
-              clearInterval(countdownInterval);
+              if (countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+                countdownIntervalRef.current = null;
+              }
               setTimeoutWarning(false);
               setError('Tempo esgotado! O apartamento foi liberado. Selecione novamente.');
               setFormData(prev => ({ ...prev, apartamento: '' }));
+              setApartamentoReservadoPorMim(null); // Limpar flag
               return 0;
             }
             return prev - 1;
@@ -166,9 +232,14 @@ export default function Formulario() {
 
       if (response.ok) {
         // Cancelar countdown já que a venda foi confirmada
+        if (countdownIntervalRef.current) {
+          clearInterval(countdownIntervalRef.current);
+          countdownIntervalRef.current = null;
+        }
         setTimeoutWarning(false);
         setCountdown(0);
-        
+        setApartamentoReservadoPorMim(null); // Limpar flag
+
         // Notificar via WebSocket que a venda foi confirmada
         if (socket) {
           socket.emit('confirmar-venda', { numero: formData.apartamento });
@@ -201,9 +272,60 @@ export default function Formulario() {
     }
   };
 
-  const apartamentosDisponiveis = apartamentos.filter(apt => apt.status === 'disponivel');
-  const unidadesBloqueadas = new Set(['101', '102', '103', '104', '109', '110', '204', '210', '403', '405']);
-  const apartamentosSelecionaveis = apartamentosDisponiveis.filter(apt => !unidadesBloqueadas.has(apt.numero));
+  const handleEntrarFila = async () => {
+    setEnviandoFila(true);
+    setError('');
+    setSuccessFila('');
+
+    // Validar campos obrigatórios
+    if (!formData.nome || !formData.telefone || !formData.email || !formData.cpf || !formData.apartamento) {
+      setError('Preencha todos os campos antes de entrar na fila');
+      setEnviandoFila(false);
+      return;
+    }
+
+    // Validar CPF
+    if (!validarCPF(formData.cpf)) {
+      setError('CPF inválido. Verifique os números digitados.');
+      setEnviandoFila(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/entrar-fila', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apartamento_numero: formData.apartamento,
+          nome: formData.nome,
+          telefone: formData.telefone,
+          email: formData.email,
+          cpf: formData.cpf,
+          consultor: formData.consultor
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(data.message);
+        setTimeout(() => {
+          router.push('/');
+        }, 3000);
+      } else {
+        setError(data.error || 'Erro ao entrar na fila');
+      }
+    } catch (error) {
+      console.error('Erro ao entrar na fila:', error);
+      setError('Erro ao processar solicitação');
+    } finally {
+      setEnviandoFila(false);
+    }
+  };
+
+  // Mostrar todos os apartamentos no formulário (sem filtro)
+  const apartamentosVisiveis = apartamentos;
+  const apartamentosDisponiveis = apartamentosVisiveis.filter(apt => apt.status === 'disponivel');
 
   if (loading) {
     return (
@@ -288,25 +410,45 @@ export default function Formulario() {
               value={formData.apartamento}
               onChange={(e) => {
                 handleInputChange(e);
-                handleApartamentoSelect(e.target.value);
+                if (e.target.value) {
+                  const apt = apartamentos.find(a => a.numero === e.target.value);
+                  // Só chama handleApartamentoSelect se estiver disponível
+                  // Se estiver reservado ou negociacao, apenas atualiza o formData (já feito no handleInputChange)
+                  if (apt?.status === 'disponivel') {
+                    handleApartamentoSelect(e.target.value);
+                  }
+                }
               }}
               required
               className="w-full px-4 py-3 text-gray-900 bg-gray-50 border-2 border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-300 appearance-none cursor-pointer"
             >
-              <option value="" className="text-gray-500">Selecione um apartamento disponível</option>
-              {apartamentosSelecionaveis.map((apt) => (
-                <option key={apt.id} value={apt.numero} className="text-gray-900">
-                  {apt.numero === 'L01' ? 'Loja L01' : `Apartamento ${apt.numero}`}
-                </option>
-              ))}
+              <option value="" className="text-gray-500">Selecione um apartamento</option>
+              {apartamentosVisiveis.map((apt) => {
+                const statusText = apt.status === 'reservado' ? ' (Reservado)' :
+                                   apt.status === 'negociacao' ? ' (Em Negociação)' : '';
+                // Permite selecionar disponível OU reservado, mas não negociacao
+                const isSelectable = apt.status === 'disponivel' || apt.status === 'reservado';
+
+                return (
+                  <option
+                    key={apt.id}
+                    value={apt.numero}
+                    className={isSelectable ? 'text-gray-900' : 'text-gray-500'}
+                    disabled={!isSelectable}
+                  >
+                    {apt.numero === 'L01' ? 'Loja L01' : `Apartamento ${apt.numero}`}{statusText}
+                  </option>
+                );
+              })}
             </select>
             <div className="flex items-center mt-2">
               <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
               <p className="text-sm text-gray-600">
-                {apartamentosSelecionaveis.length} apartamentos disponíveis
+                {apartamentosDisponiveis.length} apartamentos disponíveis
               </p>
             </div>
           </div>
+
           {/* Nome */}
           <div className="group">
             <label htmlFor="nome" className="block text-sm font-semibold text-gray-800 mb-2 flex items-center">
@@ -409,30 +551,77 @@ export default function Formulario() {
           </div>
 
 
-          {/* Botão de envio */}
+          {/* Botão de envio - dinâmico baseado no status do apartamento */}
           <div className="pt-4">
-            <button
-              type="submit"
-              disabled={submitting || success !== ''}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 px-6 rounded-lg font-semibold text-lg shadow-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all duration-200 hover:scale-[1.02] disabled:hover:scale-100 flex items-center justify-center"
-            >
-              {submitting ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Confirmando...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                  </svg>
-                  Confirmar Reserva
-                </>
-              )}
-            </button>
+            {(() => {
+              const apt = apartamentos.find(a => a.numero === formData.apartamento);
+              const isReservadoPorOutro = apt && apt.status === 'reservado' && apartamentoReservadoPorMim !== formData.apartamento;
+
+              if (isReservadoPorOutro) {
+                // Botão para entrar na 2ª opção
+                return (
+                  <>
+                    <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm font-semibold text-blue-800 mb-2">
+                        Este apartamento não está disponível no momento
+                      </p>
+                      <p className="text-sm text-blue-700">
+                        Gostaria de entrar na lista de 2ª opção? Nossos consultores entrarão em contato caso o apartamento fique disponível.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleEntrarFila}
+                      disabled={enviandoFila}
+                      className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-6 rounded-lg font-semibold text-lg shadow-lg hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all duration-200 hover:scale-[1.02] disabled:hover:scale-100 flex items-center justify-center"
+                    >
+                      {enviandoFila ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Entrando na fila...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
+                          </svg>
+                          Entrar na 2ª Opção
+                        </>
+                      )}
+                    </button>
+                  </>
+                );
+              }
+
+              // Botão normal de confirmar reserva
+              return (
+                <button
+                  type="submit"
+                  disabled={submitting || success !== ''}
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 px-6 rounded-lg font-semibold text-lg shadow-lg hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transform transition-all duration-200 hover:scale-[1.02] disabled:hover:scale-100 flex items-center justify-center"
+                >
+                  {submitting ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Confirmando...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      Confirmar Reserva
+                    </>
+                  )}
+                </button>
+              );
+            })()}
           </div>
         </form>
 
@@ -449,6 +638,85 @@ export default function Formulario() {
           </button>
         </div>
       </div>
+
+      {/* Modal para confirmar entrada na fila */}
+      {mostrarModalFila && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-bold text-gray-800">Entrar na 2ª Opção</h3>
+              <button
+                onClick={() => setMostrarModalFila(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            {successFila ? (
+              <div className="text-center py-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                </div>
+                <p className="text-green-800 font-semibold">{successFila}</p>
+                <p className="text-sm text-gray-600 mt-2">Redirecionando...</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-6">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>Apartamento:</strong> {formData.apartamento}
+                    </p>
+                    <p className="text-sm text-blue-800 mt-1">
+                      <strong>Nome:</strong> {formData.nome}
+                    </p>
+                    <p className="text-sm text-blue-800 mt-1">
+                      <strong>CPF:</strong> {formData.cpf}
+                    </p>
+                  </div>
+                  <p className="text-sm text-gray-700">
+                    Ao confirmar, você entrará na lista de 2ª opção para este apartamento.
+                    Nossos consultores entrarão em contato caso ele fique disponível.
+                  </p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarModalFila(false)}
+                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-3 px-4 rounded-lg font-medium transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleEntrarFila}
+                    disabled={enviandoFila}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center"
+                  >
+                    {enviandoFila ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Confirmando...
+                      </>
+                    ) : (
+                      'Confirmar'
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

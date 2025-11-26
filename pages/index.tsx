@@ -8,14 +8,16 @@ export default function Home() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [loading, setLoading] = useState(true);
   const [qrCodeGeral, setQrCodeGeral] = useState<string>('');
+  const [filaCounts, setFilaCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     // Conectar ao WebSocket
     const socketInstance = io();
     setSocket(socketInstance);
 
-    // Buscar apartamentos iniciais
+    // Buscar apartamentos e filas iniciais
     fetchApartamentos();
+    fetchFilaCounts();
 
     // Escutar eventos do WebSocket
     socketInstance.on('apartamento-reservado', (numero: string) => {
@@ -29,23 +31,26 @@ export default function Home() {
     });
 
     socketInstance.on('apartamento-vendido', (data: { numero: string }) => {
-      setApartamentos(prev => 
-        prev.map(apt => 
-          apt.numero === data.numero 
-            ? { ...apt, status: 'vendido' as const }
+      setApartamentos(prev =>
+        prev.map(apt =>
+          apt.numero === data.numero
+            ? { ...apt, status: 'reservado' as const }
             : apt
         )
       );
     });
 
     socketInstance.on('apartamento-liberado', (numero: string) => {
-      setApartamentos(prev => 
-        prev.map(apt => 
-          apt.numero === numero 
+      console.log('🟢 Evento recebido: apartamento-liberado', numero);
+      setApartamentos(prev =>
+        prev.map(apt =>
+          apt.numero === numero
             ? { ...apt, status: 'disponivel' as const }
             : apt
         )
       );
+      // Recarregar apartamentos do banco para garantir sincronização
+      fetchApartamentos();
     });
 
     return () => {
@@ -71,13 +76,28 @@ export default function Home() {
     }
   };
 
+  const fetchFilaCounts = async () => {
+    try {
+      const response = await fetch('/api/listar-filas');
+      const data = await response.json();
+
+      const counts: Record<string, number> = {};
+      Object.entries(data.filasPorApartamento).forEach(([numero, fila]) => {
+        counts[numero] = (fila as any[]).length;
+      });
+      setFilaCounts(counts);
+    } catch (error) {
+      console.error('Erro ao buscar contagem de filas:', error);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'disponivel':
         return 'bg-gradient-to-br from-green-400 to-green-600 shadow-green-200';
       case 'negociacao':
         return 'bg-gradient-to-br from-yellow-400 to-orange-500 shadow-yellow-200';
-      case 'vendido':
+      case 'reservado':
         return 'bg-gradient-to-br from-red-400 to-red-600 shadow-red-200';
       default:
         return 'bg-gradient-to-br from-gray-400 to-gray-600 shadow-gray-200';
@@ -196,7 +216,7 @@ export default function Home() {
                   {apartamento.numero}
                 </h2>
               </div>
-              
+
               {/* Efeito de borda brilhante */}
               <div className="absolute inset-0 rounded-xl border-2 border-white/30 group-hover:border-white/60 transition-all duration-300"></div>
             </div>
@@ -255,7 +275,7 @@ export default function Home() {
                     <svg className="w-8 h-8 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                     </svg>
-                    <div className="text-3xl font-bold mb-1">{apartamentos.filter(a => a.status === 'vendido').length}</div>
+                    <div className="text-3xl font-bold mb-1">{apartamentos.filter(a => a.status === 'reservado').length}</div>
                     <div className="text-sm opacity-90">Reservados</div>
                   </div>
                 </div>
@@ -266,12 +286,12 @@ export default function Home() {
             <div className="mt-8">
               <div className="flex justify-between text-sm text-gray-600 mb-2">
                 <span>Progresso de Vendas</span>
-                <span>{Math.round((apartamentos.filter(a => a.status === 'vendido').length / apartamentos.length) * 100)}% vendido</span>
+                <span>{Math.round((apartamentos.filter(a => a.status === 'reservado').length / apartamentos.length) * 100)}% reservado</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
-                <div 
+                <div
                   className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-1000 shadow-md"
-                  style={{ width: `${(apartamentos.filter(a => a.status === 'vendido').length / apartamentos.length) * 100}%` }}
+                  style={{ width: `${(apartamentos.filter(a => a.status === 'reservado').length / apartamentos.length) * 100}%` }}
                 ></div>
               </div>
             </div>

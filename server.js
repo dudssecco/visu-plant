@@ -44,11 +44,17 @@ app.prepare().then(() => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ numero })
-        }).then(() => {
-          // Broadcast para todos os clientes
+        }).then((response) => {
+          console.log('API liberar respondeu:', response.status);
+          // Broadcast para todos os clientes independentemente do status
           io.emit('apartamento-liberado', numero);
           apartamentoTimeouts.delete(numero);
-        }).catch(console.error);
+        }).catch((error) => {
+          console.error('Erro ao liberar apartamento:', error);
+          // Mesmo com erro, emitir evento para atualizar UI
+          io.emit('apartamento-liberado', numero);
+          apartamentoTimeouts.delete(numero);
+        });
       }, 120000); // 120 segundos
 
       apartamentoTimeouts.set(numero, timeoutId);

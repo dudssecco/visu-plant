@@ -4,11 +4,24 @@ import { validarCPF } from './cpf-utils';
 export interface Apartamento {
   id: number;
   numero: string;
-  status: 'disponivel' | 'negociacao' | 'vendido';
+  status: 'disponivel' | 'negociacao' | 'reservado';
   cliente_nome?: string;
   cliente_telefone?: string;
   cliente_email?: string;
   cliente_cpf?: string;
+  consultor_nome?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FilaSegundaOpcao {
+  id: number;
+  apartamento_numero: string;
+  posicao_fila: number;
+  cliente_nome: string;
+  cliente_telefone: string;
+  cliente_email: string;
+  cliente_cpf: string;
   consultor_nome?: string;
   created_at: string;
   updated_at: string;
@@ -53,7 +66,7 @@ class DatabaseManager {
         CREATE TABLE IF NOT EXISTS apartamentos (
           id SERIAL PRIMARY KEY,
           numero VARCHAR(10) UNIQUE NOT NULL,
-          status VARCHAR(20) DEFAULT 'disponivel' CHECK (status IN ('disponivel', 'negociacao', 'vendido')),
+          status VARCHAR(20) DEFAULT 'disponivel' CHECK (status IN ('disponivel', 'negociacao', 'reservado')),
           cliente_nome VARCHAR(255),
           cliente_telefone VARCHAR(20),
           cliente_email VARCHAR(255),
@@ -66,8 +79,37 @@ class DatabaseManager {
 
       // Adicionar coluna CPF se não existir (migração)
       await client.query(`
-        ALTER TABLE apartamentos 
+        ALTER TABLE apartamentos
         ADD COLUMN IF NOT EXISTS cliente_cpf VARCHAR(14)
+      `);
+
+      // Criar tabela de fila de segunda opção
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS fila_segunda_opcao (
+          id SERIAL PRIMARY KEY,
+          apartamento_numero VARCHAR(10) NOT NULL,
+          posicao_fila INTEGER NOT NULL,
+          cliente_nome VARCHAR(255) NOT NULL,
+          cliente_telefone VARCHAR(20) NOT NULL,
+          cliente_email VARCHAR(255) NOT NULL,
+          cliente_cpf VARCHAR(14) NOT NULL,
+          consultor_nome VARCHAR(255),
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT fk_apartamento FOREIGN KEY (apartamento_numero)
+            REFERENCES apartamentos(numero) ON DELETE CASCADE,
+          CONSTRAINT unique_cpf_apartamento UNIQUE (apartamento_numero, cliente_cpf)
+        )
+      `);
+
+      // Criar índices para performance nas consultas de fila
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_fila_apartamento_posicao
+          ON fila_segunda_opcao(apartamento_numero, posicao_fila)
+      `);
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_fila_cpf
+          ON fila_segunda_opcao(cliente_cpf)
       `);
 
       // Verificar se precisa inserir dados iniciais
@@ -118,8 +160,8 @@ class DatabaseManager {
   }
 
   async updateApartamentoStatus(
-    numero: string, 
-    status: 'disponivel' | 'negociacao' | 'vendido', 
+    numero: string,
+    status: 'disponivel' | 'negociacao' | 'reservado', 
     clienteData?: {
       nome?: string;
       telefone?: string;
@@ -158,11 +200,14 @@ class DatabaseManager {
 
   async verificarLimiteCPF(cpf: string): Promise<{ valido: boolean; apartamentosAtivos: number }> {
     try {
+      // Limpar CPF (apenas dígitos) para buscar no banco
+      const cpfLimpo = cpf.replace(/[^\d]/g, '');
+
       const result = await this.pool.query(`
-        SELECT COUNT(*) as count 
-        FROM apartamentos 
-        WHERE cliente_cpf = $1 AND status IN ('negociacao', 'vendido')
-      `, [cpf]);
+        SELECT COUNT(*) as count
+        FROM apartamentos
+        WHERE cliente_cpf = $1 AND status IN ('negociacao', 'reservado')
+      `, [cpfLimpo]);
 
       const apartamentosAtivos = parseInt(result.rows[0].count);
       return {
@@ -214,8 +259,8 @@ class DatabaseManager {
       const cpfLimpo = clienteData.cpf.replace(/[^\d]/g, '');
 
       const result = await this.pool.query(`
-        UPDATE apartamentos 
-        SET status = 'vendido',
+        UPDATE apartamentos
+        SET status = 'reservado',
             cliente_nome = $1,
             cliente_telefone = $2,
             cliente_email = $3,
@@ -264,7 +309,7 @@ class DatabaseManager {
     try {
       const result = await this.pool.query(`
         UPDATE apartamentos
-        SET status = 'vendido',
+        SET status = 'reservado',
             cliente_nome = NULL,
             cliente_telefone = NULL,
             cliente_email = NULL,
@@ -304,6 +349,149 @@ class DatabaseManager {
       return 0;
     } finally {
       client.release();
+    }
+  }
+
+  // ============================================
+  // MÉTODOS DA FILA DE SEGUNDA OPÇÃO
+  // ============================================
+
+  /**
+   * Adiciona um cliente à fila de segunda opção para um apartamento
+   * Retorna a posição na fila ou erro se falhar
+   */
+  async adicionarNaFila(
+    apartamentoNumero: string,
+    clienteData: {
+      nome: string;
+      telefone: string;
+      email: string;
+      cpf: string;
+      consultor?: string;
+    }
+  ): Promise<{ success: boolean; posicao?: number; error?: string }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Limpar CPF (apenas dígitos)
+      const cpfLimpo = clienteData.cpf.replace(/[^\d]/g, '');
+
+      // Verificar se CPF já está na fila para este apartamento
+      const checkDuplicate = await client.query(
+        'SELECT id FROM fila_segunda_opcao WHERE apartamento_numero = $1 AND cliente_cpf = $2',
+        [apartamentoNumero, cpfLimpo]
+      );
+
+      if (checkDuplicate.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return { success: false, error: 'CPF já está na fila para este apartamento' };
+      }
+
+      // Calcular próxima posição na fila
+      const positionQuery = await client.query(
+        'SELECT COALESCE(MAX(posicao_fila), 0) + 1 as next_position FROM fila_segunda_opcao WHERE apartamento_numero = $1',
+        [apartamentoNumero]
+      );
+      const nextPosition = positionQuery.rows[0].next_position;
+
+      // Inserir na fila
+      const result = await client.query(
+        `INSERT INTO fila_segunda_opcao
+         (apartamento_numero, posicao_fila, cliente_nome, cliente_telefone, cliente_email, cliente_cpf, consultor_nome)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, posicao_fila`,
+        [
+          apartamentoNumero,
+          nextPosition,
+          clienteData.nome,
+          clienteData.telefone,
+          clienteData.email,
+          cpfLimpo,
+          clienteData.consultor || null
+        ]
+      );
+
+      await client.query('COMMIT');
+      return { success: true, posicao: result.rows[0].posicao_fila };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Erro ao adicionar na fila:', error);
+      return { success: false, error: 'Erro ao adicionar na fila de espera' };
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Obtém toda a fila de um apartamento específico, ordenada por posição
+   */
+  async obterFilaPorApartamento(apartamentoNumero: string): Promise<FilaSegundaOpcao[]> {
+    try {
+      const result = await this.pool.query(
+        'SELECT * FROM fila_segunda_opcao WHERE apartamento_numero = $1 ORDER BY posicao_fila ASC',
+        [apartamentoNumero]
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Erro ao obter fila:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Obtém o tamanho da fila de um apartamento
+   */
+  async obterTamanhoFila(apartamentoNumero: string): Promise<number> {
+    try {
+      const result = await this.pool.query(
+        'SELECT COUNT(*) as count FROM fila_segunda_opcao WHERE apartamento_numero = $1',
+        [apartamentoNumero]
+      );
+      return parseInt(result.rows[0].count);
+    } catch (error) {
+      console.error('Erro ao obter tamanho da fila:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Verifica se um CPF está na fila de um apartamento específico
+   */
+  async verificarCpfNaFila(apartamentoNumero: string, cpf: string): Promise<{
+    naFila: boolean;
+    posicao?: number;
+  }> {
+    try {
+      const cpfLimpo = cpf.replace(/[^\d]/g, '');
+      const result = await this.pool.query(
+        'SELECT posicao_fila FROM fila_segunda_opcao WHERE apartamento_numero = $1 AND cliente_cpf = $2',
+        [apartamentoNumero, cpfLimpo]
+      );
+
+      if (result.rows.length > 0) {
+        return { naFila: true, posicao: result.rows[0].posicao_fila };
+      }
+      return { naFila: false };
+    } catch (error) {
+      console.error('Erro ao verificar CPF na fila:', error);
+      return { naFila: false };
+    }
+  }
+
+  /**
+   * Obtém todas as filas de todos os apartamentos
+   * Útil para visualização administrativa
+   */
+  async obterTodasFilas(): Promise<FilaSegundaOpcao[]> {
+    try {
+      const result = await this.pool.query(
+        'SELECT * FROM fila_segunda_opcao ORDER BY apartamento_numero, posicao_fila ASC'
+      );
+      return result.rows;
+    } catch (error) {
+      console.error('Erro ao obter todas as filas:', error);
+      return [];
     }
   }
 

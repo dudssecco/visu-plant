@@ -46,10 +46,10 @@ export default function FormularioMultiplo() {
     });
 
     socketInstance.on('apartamento-vendido', (data: { numero: string }) => {
-      setApartamentos(prev => 
-        prev.map(apt => 
-          apt.numero === data.numero 
-            ? { ...apt, status: 'vendido' as const }
+      setApartamentos(prev =>
+        prev.map(apt =>
+          apt.numero === data.numero
+            ? { ...apt, status: 'reservado' as const }
             : apt
         )
       );

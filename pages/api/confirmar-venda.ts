@@ -50,8 +50,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           numero 
         });
       } else {
-        res.status(409).json({ 
-          error: 'Apartamento não está disponível para confirmação. Pode ter sido vendido para outro cliente.' 
+        res.status(409).json({
+          error: 'Apartamento não está disponível para confirmação. Pode ter sido reservado para outro cliente.'
         });
       }
     } catch (error) {
