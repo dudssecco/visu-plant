@@ -23,8 +23,8 @@ export default function FormularioMultiplo() {
 
   // Sem formulário de dados pessoais nesta página
 
-  // Unidades especiais: somente estas devem aparecer nesta página
-  const unidadesEspeciais = new Set(['101','102','103','104','109','110','204','210','403','405']);
+  // Unidades especiais: somente estas devem aparecer nesta página (apartamentos já reservados)
+  const unidadesEspeciais = new Set(['L02', '207', '208', '209', '211', '213', '215', '306', '307', '309']);
 
   useEffect(() => {
     // Conectar ao WebSocket
@@ -87,33 +87,46 @@ export default function FormularioMultiplo() {
 
   const handleApartamentoToggle = async (numeroApartamento: string) => {
     setError('');
+
+    // Atualiza estado local para reservado INSTANTANEAMENTE (sensação de escassez)
+    setApartamentos(prev => prev.map(apt => (
+      apt.numero === numeroApartamento ? { ...apt, status: 'reservado' as const } : apt
+    )));
+
     try {
-      // 1) Marca como negociação no backend
-      const reservarResponse = await fetch('/api/reservar', {
+      // Chamar API para marcar como reservado no backend
+      const response = await fetch('/api/atualizar-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero: numeroApartamento })
+        body: JSON.stringify({
+          numero: numeroApartamento,
+          status: 'reservado'
+        })
       });
-      const reservarData = await reservarResponse.json();
 
-      if (!reservarResponse.ok) {
-        setError(reservarData.error || 'Não foi possível colocar em negociação');
+      if (!response.ok) {
+        // Se falhar, reverter o status localmente
+        setApartamentos(prev => prev.map(apt => (
+          apt.numero === numeroApartamento ? { ...apt, status: 'disponivel' as const } : apt
+        )));
+        setError('Erro ao atualizar status do apartamento');
         return;
       }
 
-      // 2) Atualiza local para negociação
-      setApartamentos(prev => prev.map(apt => (
-        apt.numero === numeroApartamento ? { ...apt, status: 'negociacao' as const } : apt
-      )));
-
-      // 3) Dispara fluxo de negociar e vender em 20s via socket (servidor orquestra)
+      // Notificar via WebSocket que o apartamento foi reservado
+      // Envia para o servidor que faz broadcast para todos os clientes
       if (socket) {
-        socket.emit('negociar-e-vender', numeroApartamento);
+        socket.emit('confirmar-venda', { numero: numeroApartamento });
       }
-      setSuccess(`Apartamento ${numeroApartamento} em negociação.`);
+
+      setSuccess(`Apartamento ${numeroApartamento} reservado!`);
     } catch (error) {
-      console.error('Erro ao iniciar negociação:', error);
-      setError('Erro ao iniciar negociação');
+      console.error('Erro ao reservar apartamento:', error);
+      // Reverter status em caso de erro
+      setApartamentos(prev => prev.map(apt => (
+        apt.numero === numeroApartamento ? { ...apt, status: 'disponivel' as const } : apt
+      )));
+      setError('Erro ao processar reserva');
     }
   };
 

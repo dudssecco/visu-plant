@@ -323,8 +323,8 @@ export default function Formulario() {
     }
   };
 
-  // Mostrar todos os apartamentos no formulário (sem filtro)
-  const apartamentosVisiveis = apartamentos;
+  // Mostrar todos os apartamentos exceto os vendidos
+  const apartamentosVisiveis = apartamentos.filter(apt => apt.status !== 'vendido');
   const apartamentosDisponiveis = apartamentosVisiveis.filter(apt => apt.status === 'disponivel');
 
   if (loading) {

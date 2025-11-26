@@ -99,6 +99,8 @@ export default function Home() {
         return 'bg-gradient-to-br from-yellow-400 to-orange-500 shadow-yellow-200';
       case 'reservado':
         return 'bg-gradient-to-br from-red-400 to-red-600 shadow-red-200';
+      case 'vendido':
+        return 'bg-gradient-to-br from-blue-400 to-blue-600 shadow-blue-200';
       default:
         return 'bg-gradient-to-br from-gray-400 to-gray-600 shadow-gray-200';
     }
@@ -110,6 +112,8 @@ export default function Home() {
         return 'Disponível';
       case 'negociacao':
         return 'Em Negociação';
+      case 'reservado':
+        return 'Reservado';
       case 'vendido':
         return 'Vendido';
       default:
@@ -196,6 +200,10 @@ export default function Home() {
                 <div className="w-5 h-5 bg-gradient-to-r from-red-400 to-red-600 rounded-full shadow-md group-hover:scale-110 transition-transform"></div>
                 <span className="text-gray-700 font-medium">Reservado</span>
               </div>
+              <div className="flex items-center gap-3 group cursor-pointer">
+                <div className="w-5 h-5 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full shadow-md group-hover:scale-110 transition-transform"></div>
+                <span className="text-gray-700 font-medium">Vendido</span>
+              </div>
             </div>
           </div>
         </div>
@@ -228,10 +236,10 @@ export default function Home() {
           <div className="bg-white/60 backdrop-blur-md rounded-2xl shadow-xl border border-white/20 p-8 mx-4">
             <h3 className="text-2xl font-bold text-gray-800 text-center mb-8">Resumo do Empreendimento</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
               {/* Total */}
               <div className="text-center group">
-                <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6 shadow-lg group-hover:shadow-xl transition-shadow">
+                <div className="bg-gradient-to-r from-gray-500 to-gray-600 rounded-2xl p-6 shadow-lg group-hover:shadow-xl transition-shadow">
                   <div className="text-white">
                     <svg className="w-8 h-8 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
@@ -268,15 +276,28 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Vendidos */}
+              {/* Reservados */}
               <div className="text-center group">
                 <div className="bg-gradient-to-r from-red-400 to-red-600 rounded-2xl p-6 shadow-lg group-hover:shadow-xl transition-shadow">
                   <div className="text-white">
                     <svg className="w-8 h-8 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     <div className="text-3xl font-bold mb-1">{apartamentos.filter(a => a.status === 'reservado').length}</div>
                     <div className="text-sm opacity-90">Reservados</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vendidos */}
+              <div className="text-center group">
+                <div className="bg-gradient-to-r from-blue-400 to-blue-600 rounded-2xl p-6 shadow-lg group-hover:shadow-xl transition-shadow">
+                  <div className="text-white">
+                    <svg className="w-8 h-8 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    <div className="text-3xl font-bold mb-1">{apartamentos.filter(a => a.status === 'vendido').length}</div>
+                    <div className="text-sm opacity-90">Vendidos</div>
                   </div>
                 </div>
               </div>
@@ -286,12 +307,12 @@ export default function Home() {
             <div className="mt-8">
               <div className="flex justify-between text-sm text-gray-600 mb-2">
                 <span>Progresso de Vendas</span>
-                <span>{Math.round((apartamentos.filter(a => a.status === 'reservado').length / apartamentos.length) * 100)}% reservado</span>
+                <span>{Math.round((apartamentos.filter(a => a.status === 'reservado' || a.status === 'vendido').length / apartamentos.length) * 100)}% vendido</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3">
                 <div
                   className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-1000 shadow-md"
-                  style={{ width: `${(apartamentos.filter(a => a.status === 'reservado').length / apartamentos.length) * 100}%` }}
+                  style={{ width: `${(apartamentos.filter(a => a.status === 'reservado' || a.status === 'vendido').length / apartamentos.length) * 100}%` }}
                 ></div>
               </div>
             </div>

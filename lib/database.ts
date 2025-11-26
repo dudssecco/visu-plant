@@ -4,7 +4,7 @@ import { validarCPF } from './cpf-utils';
 export interface Apartamento {
   id: number;
   numero: string;
-  status: 'disponivel' | 'negociacao' | 'reservado';
+  status: 'disponivel' | 'negociacao' | 'reservado' | 'vendido';
   cliente_nome?: string;
   cliente_telefone?: string;
   cliente_email?: string;
@@ -66,7 +66,7 @@ class DatabaseManager {
         CREATE TABLE IF NOT EXISTS apartamentos (
           id SERIAL PRIMARY KEY,
           numero VARCHAR(10) UNIQUE NOT NULL,
-          status VARCHAR(20) DEFAULT 'disponivel' CHECK (status IN ('disponivel', 'negociacao', 'reservado')),
+          status VARCHAR(20) DEFAULT 'disponivel' CHECK (status IN ('disponivel', 'negociacao', 'reservado', 'vendido')),
           cliente_nome VARCHAR(255),
           cliente_telefone VARCHAR(20),
           cliente_email VARCHAR(255),
@@ -117,20 +117,71 @@ class DatabaseManager {
       const count = parseInt(result.rows[0].count);
 
       if (count === 0) {
-        const apartamentos = [
-          'L01',
-          '101', '102', '103', '104', '105', '106', '107', '108', '109', '110', '111',
-          '201', '202', '203', '204', '205', '206', '207', '208', '209', '210', '211', '212',
-          '301', '302', '303', '304', '305', '306', '307', '308', '309',
-          '401', '402', '403', '404', '405', '406', '407', '408', '409',
-          '501', '502'
+        // Apartamentos com seus status específicos (numero, status)
+        const apartamentos: [string, string][] = [
+          // Lojas
+          ['L01', 'vendido'],
+          ['L02', 'disponivel'], // Formulário múltiplo
+
+          // 1º Andar
+          ['101', 'vendido'],
+          ['102', 'disponivel'],
+          ['103', 'disponivel'],
+          ['104', 'vendido'],
+          ['105', 'vendido'],
+          ['106', 'vendido'],
+          ['107', 'vendido'],
+          ['108', 'disponivel'],
+          ['109', 'disponivel'],
+
+          // 2º Andar
+          ['201', 'disponivel'],
+          ['202', 'disponivel'],
+          ['203', 'disponivel'],
+          ['204', 'disponivel'],
+          ['205', 'disponivel'],
+          ['206', 'vendido'],
+          ['207', 'disponivel'], // Formulário múltiplo
+          ['208', 'disponivel'], // Formulário múltiplo
+          ['209', 'disponivel'], // Formulário múltiplo
+          ['210', 'disponivel'],
+          ['211', 'disponivel'], // Formulário múltiplo
+          ['212', 'disponivel'],
+          ['213', 'disponivel'], // Formulário múltiplo
+          ['214', 'disponivel'],
+          ['215', 'disponivel'], // Formulário múltiplo
+
+          // 3º Andar
+          ['301', 'disponivel'],
+          ['302', 'disponivel'],
+          ['303', 'disponivel'],
+          ['304', 'disponivel'],
+          ['305', 'disponivel'],
+          ['306', 'disponivel'], // Formulário múltiplo
+          ['307', 'disponivel'], // Formulário múltiplo
+          ['308', 'vendido'],
+          ['309', 'disponivel'], // Formulário múltiplo
+          ['310', 'disponivel'],
+          ['311', 'disponivel'],
+          ['312', 'disponivel'],
+          ['313', 'disponivel'],
+          ['314', 'disponivel'],
+          ['315', 'disponivel'],
+
+          // 4º Andar
+          ['401', 'vendido'],
+          ['402', 'vendido'],
+          ['403', 'vendido'],
+          ['404', 'vendido'],
+          ['405', 'vendido'],
+          ['406', 'vendido']
         ];
 
-        for (const numero of apartamentos) {
-          await client.query('INSERT INTO apartamentos (numero) VALUES ($1)', [numero]);
+        for (const [numero, status] of apartamentos) {
+          await client.query('INSERT INTO apartamentos (numero, status) VALUES ($1, $2)', [numero, status]);
         }
-        
-        console.log('✅ Apartamentos iniciais inseridos');
+
+        console.log('✅ Apartamentos iniciais inseridos com status corretos');
       }
 
       client.release();
@@ -161,7 +212,7 @@ class DatabaseManager {
 
   async updateApartamentoStatus(
     numero: string,
-    status: 'disponivel' | 'negociacao' | 'reservado', 
+    status: 'disponivel' | 'negociacao' | 'reservado' | 'vendido',
     clienteData?: {
       nome?: string;
       telefone?: string;
